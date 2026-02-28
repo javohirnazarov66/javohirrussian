@@ -7,7 +7,6 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
       :root {
         --bg-dark: #0a0f1e;
@@ -2958,12 +2957,12 @@
         <div class="qs-range-row">
           <div class="qs-range-field">
             <label class="qs-range-lbl">From</label>
-            <input class="qs-range-num" type="number" id="rangeStart" min="1" max="10000" step="1" value="1" oninput="validateRangeSize('rangeStart','rangeEnd','quizRangeError')" onblur="clampRangeInputs('rangeStart','rangeEnd','quizRangeError');saveQuizSettings()">
+            <input class="qs-range-num" type="number" id="rangeStart" min="1" max="10000" step="1" value="1" oninput="validateRangeSize('rangeStart','rangeEnd','quizRangeError')" onblur="clampRangeInputs('rangeStart','rangeEnd','quizRangeError')">
           </div>
           <span class="qs-range-sep">—</span>
           <div class="qs-range-field">
             <label class="qs-range-lbl">To</label>
-            <input class="qs-range-num" type="number" id="rangeEnd" min="1" max="10000" step="1" value="10000" oninput="validateRangeSize('rangeStart','rangeEnd','quizRangeError')" onblur="clampRangeInputs('rangeStart','rangeEnd','quizRangeError');saveQuizSettings()">
+            <input class="qs-range-num" type="number" id="rangeEnd" min="1" max="10000" step="1" value="10000" oninput="validateRangeSize('rangeStart','rangeEnd','quizRangeError')" onblur="clampRangeInputs('rangeStart','rangeEnd','quizRangeError')">
           </div>
         </div>
         <div class="range-error" id="quizRangeError"></div>
@@ -13227,7 +13226,7 @@
         [10000, "имитировать", "to imitate / mimic", "v"]
       ];
       // Hoisted to module level — not rebuilt on every render call
-     const POS_NAME = {
+      const POS_NAME = {
         s: 'Noun',
         v: 'Verb',
         a: 'Adj',
@@ -13259,6 +13258,7 @@
         return POS_CLASS[p] || 'pos-other';
       }
       const grid = document.getElementById('cardGrid');
+      // Precompute lowercase strings once at startup — not on every keystroke
       const cleanWords = words.filter(Boolean);
       const invalidCount = words.length - cleanWords.length;
       if (invalidCount > 0) console.warn(`Filtered out ${invalidCount} invalid word entries from array`);
@@ -13267,84 +13267,101 @@
         rl: (w[1] || '').toLowerCase(),
         el: (w[2] || '').toLowerCase()
       }));
+      // Reusable single Audio instance
       const sharedAudio = new Audio();
+      // ── DETECT SAFARI ────────────────────────────────────────────────────────
       const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-
-      function playGoogleTTS(word, onDone) {
-        if (isSafari) {
-          playSafariTTS(word, onDone);
-          return;
-        }
-        const url = `/api/tts?q=${encodeURIComponent(word)}`;
-        console.log('Fetching TTS from:', url);
-        fetch(url)
-          .then(r => {
-            if (!r.ok) throw new Error(`HTTP error! status: ${r.status}`);
-            return r.blob();
-          })
-          .then(blob => {
-            if (blob.size === 0) throw new Error('Empty audio blob received');
-            const blobUrl = URL.createObjectURL(blob);
-            sharedAudio.pause();
-            sharedAudio.src = blobUrl;
-            sharedAudio.onended = sharedAudio.onerror = (e) => {
-              URL.revokeObjectURL(blobUrl);
-              if (onDone) onDone();
-            };
-            sharedAudio.play().catch((err) => {
-              console.warn('Audio playback failed, falling back to Web Speech', err);
-              URL.revokeObjectURL(blobUrl);
-              playSafariTTS(word, onDone);
-            });
-          })
-          .catch((err) => {
-            console.warn('TTS proxy failed, falling back to Web Speech', err);
-            playSafariTTS(word, onDone);
-          });
+      // ── AUDIO: Google TTS (Chrome/Edge via fetch-blob) · Web Speech (Safari) ──
+      // ── AUDIO: Google TTS via Netlify Function ──
+function playGoogleTTS(word, onDone) {
+  // Safari blocks async fetch-then-play; use Web Speech API with Russian voice
+  if (isSafari) {
+    playSafariTTS(word, onDone);
+    return;
+  }
+  
+  // Use Netlify Function as proxy
+  const url = `/api/tts?q=${encodeURIComponent(word)}`;
+  
+  console.log('Fetching TTS from:', url);
+  
+  fetch(url)
+    .then(r => {
+      if (!r.ok) {
+        throw new Error(`HTTP error! status: ${r.status}`);
       }
-
-      function playSafariTTS(word, onDone) {
-        if (!('speechSynthesis' in window)) {
-          if (onDone) onDone();
-          return;
-        }
-        speechSynthesis.cancel();
-        const u = new SpeechSynthesisUtterance(word);
-        u.lang = 'ru-RU';
-        u.rate = 0.85;
-        const voices = speechSynthesis.getVoices();
-        const ruVoice = voices.find(v => v.lang.startsWith('ru'));
-        if (ruVoice) u.voice = ruVoice;
-        u.onend = u.onerror = () => {
-          if (onDone) onDone();
-        };
-        speechSynthesis.speak(u);
+      return r.blob();
+    })
+    .then(blob => {
+      if (blob.size === 0) {
+        throw new Error('Empty audio blob received');
       }
+      
+      const blobUrl = URL.createObjectURL(blob);
+      sharedAudio.pause();
+      sharedAudio.src = blobUrl;
+      
+      sharedAudio.onended = sharedAudio.onerror = (e) => {
+        URL.revokeObjectURL(blobUrl);
+        if (onDone) onDone();
+      };
+      
+      sharedAudio.play().catch((err) => {
+        console.warn('Audio playback failed, falling back to Web Speech', err);
+        URL.revokeObjectURL(blobUrl);
+        playSafariTTS(word, onDone);
+      });
+    })
+    .catch((err) => {
+      console.warn('TTS proxy failed, falling back to Web Speech', err);
+      playSafariTTS(word, onDone);
+    });
+}
 
+// Keep your existing playSafariTTS function as fallback
+function playSafariTTS(word, onDone) {
+  if (!('speechSynthesis' in window)) {
+    if (onDone) onDone();
+    return;
+  }
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(word);
+  u.lang = 'ru-RU';
+  u.rate = 0.85;
+  const voices = speechSynthesis.getVoices();
+  const ruVoice = voices.find(v => v.lang.startsWith('ru'));
+  if (ruVoice) u.voice = ruVoice;
+  u.onend = u.onerror = () => {
+    if (onDone) onDone();
+  };
+  speechSynthesis.speak(u);
+}
+      // ─── CARD FACTORY: build a reusable pooled node ───────────────────────────
       function buildPoolNode() {
         const sc = document.createElement('div');
         sc.className = 'card-scene';
         sc.innerHTML = `
-          <div class="card">
-            <div class="card-face">
-              <div class="card-top">
-                <span class="rank-badge"></span>
-                <span class="pos-indicator"></span>
-              </div>
-              <div class="card-content">
-                <div class="ru-word"></div>
-                <div class="en-word"></div>
-              </div>
-              <div class="card-bottom">
-                <button class="btn-audio">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>`;
+																<div class="card">
+																	<div class="card-face">
+																		<div class="card-top">
+																			<span class="rank-badge"></span>
+																			<span class="pos-indicator"></span>
+																		</div>
+																		<div class="card-content">
+																			<div class="ru-word"></div>
+																			<div class="en-word"></div>
+																		</div>
+																		<div class="card-bottom">
+																			<button class="btn-audio">
+																				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+																					<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+																					<path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+																				</svg>
+																			</button>
+																		</div>
+																	</div>
+																</div>`;
+        // Cache element references for reuse in stampCard
         sc._face = sc.querySelector('.card-face');
         sc._badge = sc.querySelector('.rank-badge');
         sc._posInd = sc.querySelector('.pos-indicator');
@@ -13360,7 +13377,7 @@
         });
         return sc;
       }
-
+      // Stamp data into a pooled node — pure property mutations, zero allocation
       function stampCard(sc, item, i) {
         const [rank, ru, en, pos] = item;
         sc._face.classList.remove('playing');
@@ -13375,26 +13392,31 @@
         sc.querySelector('.btn-audio').dataset.w = ru;
         return sc;
       }
-
+      // ─── CARD POOL ────────────────────────────────────────────────────────────
       const pool = [];
 
       function acquireNode() {
         return pool.pop() || buildPoolNode();
       }
-
-      const CARD_H = () => window.innerWidth <= 768 ? 196 : 268;
-      const GAP = 28;
-      const CARD_MIN_W = 280;
+      // ─── VIRTUAL SCROLLER ─────────────────────────────────────────────────────
+      const CARD_H = () => window.innerWidth <= 768 ? 196 : 268; // card height + gap (168+28 mobile, 240+28 desktop)
+      const GAP = 28; // px gap between cards
+      const CARD_MIN_W = 280; // min card width
       const COLS = () => Math.max(1, Math.floor((grid.clientWidth - 64 + GAP) / (CARD_MIN_W + GAP)));
-      const OVERSCAN = 2;
-      let vsData = [], vsRendered = new Map();
+      const OVERSCAN = 2; // extra rows above/below viewport
+      let vsData = [],
+        vsRendered = new Map();
       let vsRafPending = false;
 
       function vsMount() {
+        // Clear any stale empty-state message (lives outside vsRendered map)
         const emptyEl = grid.querySelector('.empty-state');
         if (emptyEl) emptyEl.remove();
         if (!vsData.length) {
-          vsRendered.forEach(n => { grid.removeChild(n); pool.push(n); });
+          vsRendered.forEach(n => {
+            grid.removeChild(n);
+            pool.push(n);
+          });
           vsRendered.clear();
           grid.style.height = '';
           grid.style.position = '';
@@ -13409,17 +13431,21 @@
         const rows = Math.ceil(vsData.length / cols);
         grid.style.height = rows * cardH + 'px';
         grid.style.position = 'relative';
-        vsRendered.forEach(n => { grid.removeChild(n); pool.push(n); });
+        vsRendered.forEach(n => {
+          grid.removeChild(n);
+          pool.push(n);
+        });
         vsRendered.clear();
         vsPaint();
       }
-
-      const GRID_PAD = () => window.innerWidth <= 768 ? 12 : 32;
-
+      const GRID_PAD = () => window.innerWidth <= 768 ? 12 : 32; // matches CSS padding (0.75rem vs 2rem)
       function vsPaint() {
         vsRafPending = false;
         if (!vsData.length) {
-          for (const [, n] of vsRendered) { grid.removeChild(n); pool.push(n); }
+          for (const [, n] of vsRendered) {
+            grid.removeChild(n);
+            pool.push(n);
+          }
           vsRendered.clear();
           return;
         }
@@ -13431,6 +13457,7 @@
         const firstRow = Math.max(0, Math.floor(relTop / cardH) - OVERSCAN);
         const lastRow = Math.min(Math.ceil(vsData.length / cols) - 1, Math.floor(relBot / cardH) + OVERSCAN);
         const firstIdx = firstRow * cols, lastIdx = Math.min(vsData.length - 1, lastRow * cols + cols - 1);
+        // Remove out-of-range nodes
         for (const [idx, node] of vsRendered) {
           if (idx < firstIdx || idx > lastIdx) {
             grid.removeChild(node);
@@ -13438,6 +13465,7 @@
             vsRendered.delete(idx);
           }
         }
+        // Add in-range nodes
         for (let idx = firstIdx; idx <= lastIdx; idx++) {
           if (vsRendered.has(idx)) continue;
           const node = acquireNode();
@@ -13461,23 +13489,31 @@
           requestAnimationFrame(vsPaint);
         }
       }
-      window.addEventListener('scroll', vsSchedule, { passive: true });
+      window.addEventListener('scroll', vsSchedule, {
+        passive: true
+      });
       let vsResizeTimer = 0;
       window.addEventListener('resize', () => {
         clearTimeout(vsResizeTimer);
         vsResizeTimer = setTimeout(vsMount, 150);
-      }, { passive: true });
+      }, {
+        passive: true
+      });
 
       function renderCards(data) {
         vsData = data;
         vsMount();
       }
-
+      // ─── FILTER + MEMOIZATION ─────────────────────────────────────────────────
       const OTHER_POS = new Set(['s', 'v', 'a', 'apro', 'anum', 'adv', 'advpro']);
-      let cFilter = 'all', cSearch = '';
-      let lastFilter = '', lastSearch = '##INIT##', lastResult = null;
+      let cFilter = 'all',
+        cSearch = '';
+      let lastFilter = '',
+        lastSearch = '##INIT##',
+        lastResult = null;
 
       function applyFilters() {
+        // Memoize: skip if nothing changed
         if (cFilter === lastFilter && cSearch === lastSearch) {
           renderCards(lastResult);
           return;
@@ -13485,7 +13521,11 @@
         lastFilter = cFilter;
         lastSearch = cSearch;
         const q = cSearch;
-        const result = q || cFilter !== 'all' ? wordsMeta.filter(({ w, rl, el }) => {
+        const result = q || cFilter !== 'all' ? wordsMeta.filter(({
+          w,
+          rl,
+          el
+        }) => {
           if (q && !rl.includes(q) && !el.includes(q)) return false;
           if (cFilter === 'all') return true;
           const p = w[3];
@@ -13495,11 +13535,13 @@
           if (cFilter === 'adv') return p === 'adv' || p === 'advpro';
           if (cFilter === 'other') return !OTHER_POS.has(p);
           return true;
-        }).map(({ w }) => w) : cleanWords;
+        }).map(({
+          w
+        }) => w) : cleanWords;
         lastResult = result;
         renderCards(result);
       }
-
+      // Debounce search
       let searchTimer = 0;
       document.getElementById('searchInput').addEventListener('input', e => {
         clearTimeout(searchTimer);
@@ -13516,6 +13558,7 @@
         if (activePill && activePill !== p) activePill.classList.remove('active');
         p.classList.add('active');
         cFilter = p.dataset.filter;
+        // Clear search when switching filters to avoid confusing empty results
         const searchEl = document.getElementById('searchInput');
         if (searchEl.value) {
           searchEl.value = '';
@@ -13547,20 +13590,19 @@
         });
         document.body.appendChild(frag);
         setTimeout(() => {
-          document.querySelectorAll('.confetti').forEach(c => c.remove());
+          const confetti = document.querySelectorAll('.confetti');
+          confetti.forEach(c => c.remove());
         }, 4500);
       }
-
       // ── PERSISTENCE ───────────────────────────────────────────────────────────────
       const LS_KEY = 'rv_stats_v1';
-      const LS_ACTIVITY = 'rv_activity_v1';
-      const LS_SRS = 'rv_srs_v1';
-      const LS_FIRST_OPEN = 'rv_first_open_v1';
+      const LS_ACTIVITY = 'rv_activity_v1'; // {dateStr: cardsReviewed}
+      const LS_SRS = 'rv_srs_v1'; // {rank: {interval, due, ease}}
+      const LS_FIRST_OPEN = 'rv_first_open_v1'; // ISO date string of first ever use
       let stats = new Map();
-      let activity = {};
-      let srsData = {};
-      let firstOpenDate = '';
-
+      let activity = {}; // date -> count
+      let srsData = {}; // rank -> {interval, due, ease}
+      let firstOpenDate = ''; // set on load, never changes
       function todayStr() {
         return localDateStr(new Date());
       }
@@ -13572,44 +13614,28 @@
         return `${y}-${m}-${day}`;
       }
 
-      function loadStats() {
-        try {
-          const raw = localStorage.getItem(LS_KEY);
-          if (raw) stats = new Map(JSON.parse(raw));
-        } catch (e) { stats = new Map(); }
-        try {
-          const raw = localStorage.getItem(LS_ACTIVITY);
-          if (raw) activity = JSON.parse(raw);
-        } catch (e) { activity = {}; }
-        try {
-          const raw = localStorage.getItem(LS_SRS);
-          if (raw) srsData = JSON.parse(raw);
-        } catch (e) { srsData = {}; }
-        try {
-          const stored = localStorage.getItem(LS_FIRST_OPEN);
-          if (stored) {
-            firstOpenDate = stored;
-          } else {
-            firstOpenDate = todayStr();
-            localStorage.setItem(LS_FIRST_OPEN, firstOpenDate);
-          }
-        } catch (e) { firstOpenDate = todayStr(); }
-      }
 
-      function saveStats() {
-        try { localStorage.setItem(LS_KEY, JSON.stringify([...stats])); } catch (e) {}
-        try { localStorage.setItem(LS_ACTIVITY, JSON.stringify(activity)); } catch (e) {}
-        try { localStorage.setItem(LS_SRS, JSON.stringify(srsData)); } catch (e) {}
-      }
+
+
 
       function recordGrade(rank, correct) {
-        const s = stats.get(rank) || { misses: 0, correct: 0 };
+        // Word stats
+        const s = stats.get(rank) || {
+          misses: 0,
+          correct: 0
+        };
         if (correct) s.correct++;
         else s.misses++;
         stats.set(rank, s);
+        // Daily activity
         const d = todayStr();
         activity[d] = (activity[d] || 0) + 1;
-        const srs = srsData[rank] || { interval: 1, ease: 2.5, due: todayStr() };
+        // SRS — simple SM-2 variant
+        const srs = srsData[rank] || {
+          interval: 1,
+          ease: 2.5,
+          due: todayStr()
+        };
         if (correct) {
           srs.interval = Math.round(srs.interval * (srs.ease || 2.5));
           srs.ease = Math.min(3.0, (srs.ease || 2.5) + 0.1);
@@ -13621,7 +13647,6 @@
         dueDate.setDate(dueDate.getDate() + srs.interval);
         srs.due = localDateStr(dueDate);
         srsData[rank] = srs;
-        saveStats();
         updateStreakUI();
       }
 
@@ -13633,6 +13658,7 @@
         localStorage.removeItem(LS_KEY);
         localStorage.removeItem(LS_ACTIVITY);
         localStorage.removeItem(LS_SRS);
+        // Reset first open date to today
         firstOpenDate = todayStr();
         localStorage.setItem(LS_FIRST_OPEN, firstOpenDate);
         updateSetupStats();
@@ -13641,31 +13667,43 @@
       }
 
       function getWeakWords() {
-        return words.filter(w => stats.has(w[0]) && stats.get(w[0]).misses > 0)
-          .sort((a, b) => stats.get(b[0]).misses - stats.get(a[0]).misses);
+        return words.filter(w => stats.has(w[0]) && stats.get(w[0]).misses > 0).sort((a, b) => stats.get(b[0]).misses - stats.get(a[0]).misses);
       }
-
+      // ── SRS DUE WORDS ─────────────────────────────────────────────────────────────
       function getDueWords() {
         const today = todayStr();
         return words.filter(w => {
           const srs = srsData[w[0]];
-          if (!srs) return false;
+          if (!srs) return false; // never seen
           return srs.due <= today;
         });
       }
 
       function getSrsBadgeInfo(rank) {
         const srs = srsData[rank];
-        if (!srs) return { cls: 'new-word', txt: 'New' };
+        if (!srs) return {
+          cls: 'new-word',
+          txt: 'New'
+        };
         const today = todayStr();
-        if (srs.due <= today) return { cls: 'due', txt: 'Due' };
-        return { cls: '', txt: `+${srs.interval}d` };
+        if (srs.due <= today) return {
+          cls: 'due',
+          txt: 'Due'
+        };
+        return {
+          cls: '',
+          txt: `+${srs.interval}d`
+        };
       }
-
+      // ── STREAK ─────────────────────────────────────────────────────────────────────
       function calcStreak() {
         const today = todayStr();
-        let streak = 0, d = new Date();
-        if (!activity[today]) d.setDate(d.getDate() - 1);
+        let streak = 0,
+          d = new Date();
+        // Allow today or yesterday as start (so opening app before studying doesn't break streak)
+        if (!activity[today]) {
+          d.setDate(d.getDate() - 1);
+        }
         while (true) {
           const key = localDateStr(d);
           if (!activity[key]) break;
@@ -13681,10 +13719,11 @@
         const lblEl = document.getElementById('streakLabel');
         if (numEl) numEl.textContent = s;
         if (lblEl) lblEl.textContent = s === 1 ? 'day streak' : 'day streak';
+        // Dim banner if no streak
         const banner = document.getElementById('streakBanner');
         if (banner) banner.style.opacity = s > 0 ? '1' : '0.45';
       }
-
+      // ── PROGRESS PANEL ─────────────────────────────────────────────────────────────
       function openProgress() {
         document.getElementById('progressPanel').classList.add('active');
         renderProgressPanel();
@@ -13705,10 +13744,14 @@
         const streakRow = document.getElementById('progressStreakRow');
         const due = getDueWords().length;
         if (streak > 0) {
-          streakRow.innerHTML = `🔥 <strong>${streak}-day streak</strong> — keep it going!${due ? ` &nbsp;·&nbsp; <strong>${due}</strong> words due today` : ''}`;
+          streakRow.innerHTML = `🔥 
+																		<strong>${streak}-day streak</strong> — keep it going!${due?` &nbsp;·&nbsp; 
+																		<strong>${due}</strong> words due today`:''}`;
         } else {
-          streakRow.innerHTML = due > 0 ? `<strong>${due} words</strong> due for review today` : 'No streak yet — complete a quiz to start one!';
+          streakRow.innerHTML = due > 0 ? `
+																		<strong>${due} words</strong> due for review today` : 'No streak yet — complete a quiz to start one!';
         }
+        // Heatmap — always 28 cells (last 28 days), grey if no activity, purple if active
         const hm = document.getElementById('heatmapGrid');
         hm.innerHTML = '';
         hm.style.gridTemplateColumns = '';
@@ -13724,6 +13767,7 @@
           cell.title = `${key}: ${cnt} cards`;
           hm.appendChild(cell);
         }
+        // Bar chart — 14 days starting from firstOpenDate, growing forward in time
         const barContainer = document.getElementById('barChart');
         barContainer.innerHTML = '';
         const barToday = todayStr();
@@ -13742,48 +13786,51 @@
           const cnt = barCounts[i];
           const isFuture = key > barToday;
           const fillH = cnt > 0 ? Math.max(4, Math.round((cnt / barMax) * BAR_AREA_H)) : 0;
-          const lbl = d.toLocaleDateString('en', { month: 'short', day: 'numeric' });
+          const lbl = d.toLocaleDateString('en', {
+            month: 'short',
+            day: 'numeric'
+          });
           const isToday = key === barToday;
           const isMax = cnt === barMax && cnt > 0;
           const col = document.createElement('div');
           col.className = 'bar-col';
-          col.innerHTML =
-            `<div class="bar-num${isMax ? ' always-show' : ''}">${cnt > 0 ? cnt : ''}</div>` +
-            `<div class="bar-fill${isToday ? ' bar-today' : ''}" style="height:${fillH}px;opacity:${isFuture ? 0.2 : 1}"></div>` +
-            `<div class="bar-lbl" style="opacity:${isFuture ? 0.35 : 1}">${lbl}</div>`;
+          col.innerHTML = `
+																						<div class="bar-num${isMax?' always-show':''}">${cnt>0?cnt:''}</div>` + `
+																						<div class="bar-fill${isToday?' bar-today':''}" style="height:${fillH}px;opacity:${isFuture?0.2:1}"></div>` + `
+																						<div class="bar-lbl" style="opacity:${isFuture?0.35:1}">${lbl}</div>`;
           barContainer.appendChild(col);
         });
       }
-
       document.getElementById('progressPanel').addEventListener('click', e => {
         if (e.target === document.getElementById('progressPanel')) closeProgress();
       });
 
       function updateSetupStats() {
-        const totalSeen = stats.size, weak = getWeakWords().length, due = getDueWords().length;
+        const totalSeen = stats.size,
+          weak = getWeakWords().length,
+          due = getDueWords().length;
         const el = document.getElementById('setupStats');
         if (!el) return;
-        el.innerHTML = totalSeen
-          ? `<span>${totalSeen} words studied · <span class="stat-weak">${weak} to review</span>${due ? ` · <span style="color:#f97316">${due} SRS due</span>` : ''}</span>`
-          : `<span style="color:var(--text-muted)">No study history yet</span>`;
+        el.innerHTML = totalSeen ? `
+																						<span>${totalSeen} words studied · 
+																							<span class="stat-weak">${weak} to review</span>${due?` · 
+																							<span style="color:#f97316">${due} SRS due</span>`:''}
+																						</span>` : `
+																						<span style="color:var(--text-muted)">No study history yet</span>`;
         document.getElementById('btnReviewWeak').style.display = weak ? 'inline-flex' : 'none';
         document.getElementById('btnClearStats').style.display = totalSeen ? 'inline-flex' : 'none';
       }
-
-      loadStats();
       updateStreakUI();
-
-      let sessionLen = 0;
+      // ── SESSION LENGTH ─────────────────────────────────────────────────────────────
+      let sessionLen = 0; // 0 = all
       let activeSessionBtn = null;
-
       function setSessionLen(btn) {
         if (activeSessionBtn && activeSessionBtn !== btn) activeSessionBtn.classList.remove('active');
         btn.classList.add('active');
         activeSessionBtn = btn;
         sessionLen = parseInt(btn.dataset.len);
-        saveQuizSettings();
       }
-
+      // ── QUIZ ──────────────────────────────────────────────────────────────────────
       const ov = document.getElementById('quizOverlay');
       const quizCardWrap = document.getElementById('quizCardWrap');
       const quizProgressEl = document.getElementById('quizProgress');
@@ -13792,44 +13839,15 @@
       const quizControlsEl = document.getElementById('quizControls');
       const quizResultsEl = document.getElementById('quizResults');
 
-      const QS_KEY = 'rv_quizsettings_v1';
-
-      function saveQuizSettings() {
-        try {
-          localStorage.setItem(QS_KEY, JSON.stringify({
-            dir: quizDir,
-            pos: quizPosFilter,
-            rangeStart: document.getElementById('rangeStart').value,
-            rangeEnd: document.getElementById('rangeEnd').value,
-            sessionLen
-          }));
-        } catch (e) {}
-      }
-
-      function loadQuizSettings() {
-        try {
-          const raw = localStorage.getItem(QS_KEY);
-          if (!raw) return;
-          const s = JSON.parse(raw);
-          if (s.dir) setDir(s.dir);
-          if (s.pos) {
-            const btn = document.querySelector(`#quizPosFilter .qs-btn[data-pos="${s.pos}"]`);
-            if (btn) setPosFilter(btn);
-          }
-          if (s.rangeStart) document.getElementById('rangeStart').value = s.rangeStart;
-          if (s.rangeEnd) document.getElementById('rangeEnd').value = s.rangeEnd;
-          if (s.range && !s.rangeEnd) document.getElementById('rangeEnd').value = s.range;
-          if (s.sessionLen !== undefined) {
-            const btn = document.querySelector(`#sessionRow .qs-btn[data-len="${s.sessionLen}"]`);
-            if (btn) setSessionLen(btn);
-          }
-        } catch (e) {}
-      }
-
-      let quizDir = 'ru-en', quizPosFilter = 'all';
-      let quizDeck = [], quizIndex = 0, quizCorrect = 0, quizWrong = 0;
-      let quizUniqueTotal = 0;
-      let quizCurrentWord = null, quizRevealed = false;
+      let quizDir = 'ru-en',
+        quizPosFilter = 'all';
+      let quizDeck = [],
+        quizIndex = 0,
+        quizCorrect = 0,
+        quizWrong = 0;
+      let quizUniqueTotal = 0; // track how many unique cards were in the original deck
+      let quizCurrentWord = null,
+        quizRevealed = false;
       let fcPromptEl, fcAnswerEl, fcRankEl, fcPosEl;
 
       function cacheCardRefs() {
@@ -13842,17 +13860,28 @@
       function jumpToWord(val) {
         const n = parseInt(val);
         if (!n || n < 1 || n > 8000) return;
+        // Clear any active filter/search so the word is visible
         const allPill = document.querySelector('.filter-pill[data-filter="all"]');
         if (allPill && !allPill.classList.contains('active')) allPill.click();
         document.getElementById('searchInput').value = '';
+        // Find the word index in vsData
         const idx = vsData.findIndex(w => w[0] === n);
-        if (idx === -1) { alert(`Word #${n} not found.`); return; }
-        const cols = COLS(), cardH = CARD_H();
+        if (idx === -1) {
+          alert(`Word #${n} not found.`);
+          return;
+        }
+        // Compute Y position in the virtual grid and scroll there
+        const cols = COLS();
+        const cardH = CARD_H();
         const row = Math.floor(idx / cols);
         const gridEl = document.getElementById('cardGrid');
         const gridTop = gridEl.getBoundingClientRect().top + window.scrollY;
         const targetY = gridTop + row * cardH - window.innerHeight / 2 + cardH / 2;
-        window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+        window.scrollTo({
+          top: Math.max(0, targetY),
+          behavior: 'smooth'
+        });
+        // After scroll settles, highlight the card
         setTimeout(() => {
           const card = document.querySelector(`.card-scene[data-rank="${n}"]`);
           if (card) {
@@ -13870,12 +13899,17 @@
       function setRangeError(errId, msg) {
         const el = document.getElementById(errId);
         if (!el) return;
-        if (msg) { el.textContent = msg; el.classList.add('visible'); }
-        else { el.textContent = ''; el.classList.remove('visible'); }
+        if (msg) {
+          el.textContent = msg;
+          el.classList.add('visible');
+        } else {
+          el.textContent = '';
+          el.classList.remove('visible');
+        }
       }
 
       function gameRangeMin() {
-        return gameType === 'match' ? 24 : 10;
+        return gameType === 'match' ? 24 : 10; // snake also needs ≥10 words
       }
 
       function validateRangeSize(startId, endId, errId) {
@@ -13886,10 +13920,11 @@
         const invalid = e > 0 && s > 0 && size < min;
         if (invalid) {
           const extra = errId === 'gameRangeError' && gameType === 'match' ? ' (Match Pairs needs 3 rounds × 8 pairs)' : '';
-          setRangeError(errId, `Range too small — need at least ${min} words (currently ${Math.max(0, size)}).${extra}`);
+          setRangeError(errId, `Range too small — need at least ${min} words (currently ${Math.max(0,size)}).${extra}`);
         } else {
           setRangeError(errId, '');
         }
+        // Disable the relevant start button
         const btnId = errId === 'gameRangeError' ? 'gmStartBtn' : null;
         if (btnId) {
           const btn = document.getElementById(btnId);
@@ -13909,6 +13944,7 @@
         sEl.value = s;
         eEl.value = e;
         setRangeError(errId, '');
+        // Re-enable start button after clamp makes range valid
         const btnId = errId === 'gameRangeError' ? 'gmStartBtn' : null;
         if (btnId) {
           const btn = document.getElementById(btnId);
@@ -13922,7 +13958,6 @@
         quizDir = d;
         activeDirBtn = document.getElementById(d === 'ru-en' ? 'dirRuEn' : d === 'en-ru' ? 'dirEnRu' : 'dirMix');
         activeDirBtn.classList.add('active');
-        saveQuizSettings();
       }
 
       let activePosBtn = null;
@@ -13931,7 +13966,6 @@
         btn.classList.add('active');
         activePosBtn = btn;
         quizPosFilter = btn.dataset.pos;
-        saveQuizSettings();
       }
 
       function showSetup() {
@@ -13946,12 +13980,14 @@
         if (reviewBadge) reviewBadge.style.display = 'none';
         updateSetupStats();
       }
-
+      // Weighted sampling: nouns (s) and verbs (v) appear 3×, adj/adv 2×,
+      // conjunctions / prepositions / particles etc. appear 1×.
+      // Only applied when pos filter is 'all' — specific filters are unaffected.
       function weightedPool(arr) {
         const result = [];
         for (const w of arr) {
           const p = w[3];
-          const weight = (p === 's' || p === 'v') ? 3 : (p === 'a' || p === 'apro' || p === 'anum' || p === 'adv' || p === 'advpro') ? 2 : 1;
+          const weight = (p === 's' || p === 'v') ? 3 : (p === 'a' || p === 'apro' || p === 'anum' || p === 'adv' || p === 'advpro') ? 2 : 1; // pr, conj, part, spro, num, intj, etc.
           for (let i = 0; i < weight; i++) result.push(w);
         }
         return result;
@@ -13961,7 +13997,9 @@
         if (!pool) {
           const rStart = parseInt(document.getElementById('rangeStart').value) || 1;
           const rEnd = parseInt(document.getElementById('rangeEnd').value) || 8000;
-          pool = wordsMeta.filter(({ w }) => {
+          pool = wordsMeta.filter(({
+            w
+          }) => {
             if (w[0] < rStart || w[0] > rEnd) return false;
             if (quizPosFilter === 'all') return true;
             const p = w[3];
@@ -13971,11 +14009,18 @@
             if (quizPosFilter === 'adv') return p === 'adv' || p === 'advpro';
             if (quizPosFilter === 'other') return !OTHER_POS.has(p);
             return true;
-          }).map(({ w }) => w);
+          }).map(({
+            w
+          }) => w);
         }
-        if (!pool.length) { alert('No words match that filter/range combo.'); return; }
+        if (!pool.length) {
+          alert('No words match that filter/range combo.');
+          return;
+        }
+        // Apply frequency weighting only when showing all parts of speech
         const weighted = (quizPosFilter === 'all') ? weightedPool(pool) : pool;
         let deck = shuffle(weighted.slice());
+        // Prioritise SRS-due words at the front, then cap to session length
         const today = todayStr();
         deck.sort((a, b) => {
           const aDue = srsData[a[0]] && srsData[a[0]].due <= today ? 0 : 1;
@@ -13985,7 +14030,7 @@
         if (sessionLen > 0) deck = deck.slice(0, sessionLen);
         quizDeck = deck;
         quizDeck.forEach(w => delete w._misses);
-        quizUniqueTotal = quizDeck.length;
+        quizUniqueTotal = quizDeck.length; // remember original unique count before misses get re-inserted
         quizIndex = 0;
         quizCorrect = 0;
         quizWrong = 0;
@@ -14003,14 +14048,20 @@
 
       function startReview() {
         const weak = getWeakWords();
-        if (!weak.length) { alert('No missed words to review!'); return; }
+        if (!weak.length) {
+          alert('No missed words to review!');
+          return;
+        }
         startQuiz(weak);
       }
 
       function updateProgress() {
+        // The deck grows beyond quizUniqueTotal when missed cards are re-inserted.
+        // Use min so the bar never exceeds 100% during miss-retry phase.
         const progressPct = Math.min(100, (quizIndex / quizUniqueTotal) * 100);
         quizProgressEl.style.width = `${progressPct}%`;
         quizScoreEl.innerHTML = `✓ ${quizCorrect} &nbsp; ✗ ${quizWrong}`;
+        // Show a badge when we've passed the original deck length (now in retry-loop)
         let reviewBadge = document.getElementById('quizReviewBadge');
         if (quizIndex >= quizUniqueTotal && quizDeck.length > quizUniqueTotal) {
           if (!reviewBadge) {
@@ -14020,7 +14071,7 @@
             document.getElementById('quizTop').appendChild(reviewBadge);
           }
           const remaining = quizDeck.length - quizIndex;
-          reviewBadge.textContent = `↩ reviewing ${remaining} missed word${remaining !== 1 ? 's' : ''}`;
+          reviewBadge.textContent = `↩ reviewing ${remaining} missed word${remaining!==1?'s':''}`;
           reviewBadge.style.display = 'block';
         } else if (reviewBadge) {
           reviewBadge.style.display = 'none';
@@ -14028,7 +14079,10 @@
       }
 
       function showCard() {
-        if (quizIndex >= quizDeck.length) { showResults(); return; }
+        if (quizIndex >= quizDeck.length) {
+          showResults();
+          return;
+        }
         quizCurrentWord = quizDeck[quizIndex];
         quizRevealed = false;
         const [rank, ru, en, pos] = quizCurrentWord;
@@ -14039,6 +14093,7 @@
         card.style.transform = '';
         fcRankEl.textContent = `#${rank}`;
         fcPosEl.textContent = posName(pos);
+        // In-session retry badge
         const retryBadge = document.getElementById('retryBadge');
         if (quizCurrentWord._misses > 0) {
           retryBadge.textContent = `↩ retry ${quizCurrentWord._misses}×`;
@@ -14046,14 +14101,16 @@
         } else {
           retryBadge.style.display = 'none';
         }
+        // Persistent history badge
         const histBadge = document.getElementById('histBadge');
         const s = stats.get(rank);
         if (s && s.misses > 0) {
-          histBadge.textContent = `${s.misses} miss${s.misses > 1 ? 'es' : ''} all-time`;
+          histBadge.textContent = `${s.misses} miss${s.misses>1?'es':''} all-time`;
           histBadge.style.display = 'block';
         } else {
           histBadge.style.display = 'none';
         }
+        // SRS badge
         const srsBadge = document.getElementById('srsBadge');
         if (srsBadge) {
           const info = getSrsBadgeInfo(rank);
@@ -14064,12 +14121,16 @@
         if (useDir === 'ru-en') {
           fcPromptEl.textContent = ru;
           fcPromptEl.className = 'q-prompt';
-          fcAnswerEl.innerHTML = `<div class="ans-en">${en}</div>`;
+          fcAnswerEl.innerHTML = `
+																												<div class="ans-en">${en}</div>`;
+          // Scale font down for long Russian words
           fcPromptEl.style.fontSize = ru.length > 14 ? '2rem' : ru.length > 10 ? '2.5rem' : '3rem';
         } else {
           fcPromptEl.textContent = en;
           fcPromptEl.className = 'q-prompt en';
-          fcAnswerEl.innerHTML = `<div class="ans-ru">${ru}</div>`;
+          fcAnswerEl.innerHTML = `
+																												<div class="ans-ru">${ru}</div>`;
+          // Scale font down for long English phrases
           fcPromptEl.style.fontSize = en.length > 24 ? '1.3rem' : en.length > 16 ? '1.6rem' : '2rem';
         }
       }
@@ -14111,21 +14172,22 @@
         const weak = getWeakWords().length;
         document.getElementById('resultEmoji').textContent = emoji;
         document.getElementById('resultTitle').textContent = title;
-        document.getElementById('resultStat').innerHTML =
-          `<strong>${pct}%</strong>${quizCorrect} correct · ${quizWrong} missed · ${quizDeck.length} cards` +
-          (weak ? `<br><span class="stat-weak">${weak} word${weak > 1 ? 's' : ''} need review</span>` : '');
+        document.getElementById('resultStat').innerHTML = `
+																												<strong>${pct}%</strong>${quizCorrect} correct · ${quizWrong} missed · ${quizDeck.length} cards` + (weak ? `
+																												<br>
+																													<span class="stat-weak">${weak} word${weak>1?'s':''} need review</span>` : '');
         if (pct >= 70) spawnConfetti();
       }
 
       function clearConfetti() {
         document.querySelectorAll('.confetti').forEach(c => c.remove());
       }
-
       document.getElementById('startQuizBtn').addEventListener('click', () => {
         ov.classList.add('active');
         showSetup();
       });
       document.getElementById('closeQuizBtn').addEventListener('click', () => {
+        // Only confirm if a quiz session is actually in progress
         if (document.getElementById('quizCardWrap').style.display !== 'none') {
           showExitConfirm(() => {
             ov.classList.remove('active');
@@ -14141,15 +14203,18 @@
       document.getElementById('btnCorrect').addEventListener('click', () => grade(true));
       document.getElementById('btnWrong').addEventListener('click', () => grade(false));
       document.getElementById('btnReveal').addEventListener('click', () => revealCard());
-
+      // Note: btnReviewWeak and btnClearStats use onclick= in HTML — no duplicate addEventListener needed
       // ── DAILY WORD ──────────────────────────────────────────────────────────────
       (function initDailyWord() {
         const LS_DW_DISMISSED = 'rv_dw_dismissed_v1';
+        // Use date as seed so word is consistent per day
         function getDailyIndex() {
           const d = new Date();
           const seed = d.getFullYear() * 10000 + ((d.getMonth() + 1) * 100) + d.getDate();
+          // Simple LCG to spread across all words
           return ((seed * 1664525 + 1013904223) & 0x7fffffff) % words.length;
         }
+        // Check if dismissed today
         const dismissedDate = localStorage.getItem(LS_DW_DISMISSED);
         const today = todayStr();
         if (dismissedDate === today) {
@@ -14165,8 +14230,10 @@
           sharedAudio.pause();
           playGoogleTTS(ru);
         });
+        // Clicking the banner scrolls to the word in the grid without filtering
         document.getElementById('dailyWordInner').addEventListener('click', e => {
           if (e.target.closest('.dw-audio,.dw-close')) return;
+          // Reset any active filter/search so all cards are visible
           const searchEl = document.getElementById('searchInput');
           searchEl.value = '';
           cSearch = '';
@@ -14175,16 +14242,25 @@
           document.querySelector('.filter-pill[data-filter="all"]').classList.add('active');
           cFilter = 'all';
           applyFilters();
+          // Scroll to the word's position in the virtual grid
           const wordIdx = words.findIndex(w => w[0] === rank);
           if (wordIdx === -1) {
-            window.scrollTo({ top: document.querySelector('main').offsetTop, behavior: 'smooth' });
+            window.scrollTo({
+              top: document.querySelector('main').offsetTop,
+              behavior: 'smooth'
+            });
             return;
           }
+          // Calculate position in the virtual scroller
           const cols = Math.max(1, Math.floor((document.getElementById('cardGrid').clientWidth - 64 + 28) / (280 + 28)));
           const cardH = window.innerWidth <= 768 ? 228 : 268;
           const row = Math.floor(wordIdx / cols);
           const scrollTarget = document.querySelector('main').offsetTop + row * cardH - 80;
-          window.scrollTo({ top: scrollTarget, behavior: 'smooth' });
+          window.scrollTo({
+            top: scrollTarget,
+            behavior: 'smooth'
+          });
+          // After scroll settles, briefly highlight the card
           setTimeout(() => {
             const rendered = document.querySelectorAll('.card-scene');
             rendered.forEach(scene => {
@@ -14207,11 +14283,10 @@
           localStorage.setItem(LS_DW_DISMISSED, today);
         });
       })();
-
       // ── GAME MODE ───────────────────────────────────────────────────────────────
       const LS_GAME_HS = 'rv_game_hs_v1';
       const LS_MATCH_HS = 'rv_match_hs_v1';
-      let gameType = 'multichoice';
+      let gameType = 'multichoice'; // 'multichoice' | 'match'
       let gameDir = 'ru-en';
       let gameLen = 20;
       let gameDeck = [];
@@ -14223,8 +14298,8 @@
       let gameCorrectIdx = -1;
       let gameLocked = false;
       let gameTotalQ = 20;
-      let gameDistractorPool = [];
-
+      let gameDistractorPool = []; // cached filtered pool for picking distractors, set at game start
+      // ── Setup UI helpers ─────────────────────────────────────────────────────────
       function showGameSetup() {
         clearInterval(matchTimerId);
         stopSnake();
@@ -14240,11 +14315,7 @@
       function updateSetupHintForType() {
         const isMC = gameType === 'multichoice';
         const isSnake = gameType === 'snake';
-        document.getElementById('gameSetupHint').textContent = isMC
-          ? '3 lives · streak multiplier up to ×5 · high score saved'
-          : isSnake
-          ? 'Eat the correct Russian translation · avoid the wrong ones · 3 lives'
-          : 'Match all pairs before time runs out · 8 pairs per round';
+        document.getElementById('gameSetupHint').textContent = isMC ? '3 lives · streak multiplier up to ×5 · high score saved' : isSnake ? 'Eat the correct Russian translation · avoid the wrong ones · 3 lives' : 'Match all pairs before time runs out · 8 pairs per round';
         document.getElementById('gameDirLabel').style.display = isMC ? '' : 'none';
         document.getElementById('gameDirRow').style.display = isMC ? '' : 'none';
         document.getElementById('gameLenLabel').style.display = '';
@@ -14286,12 +14357,12 @@
         else if (gameType === 'snake') startSnakeGame();
         else startMatchGame();
       }
-
+      // ── MULTIPLE CHOICE ──────────────────────────────────────────────────────────
       function startGame() {
         const gRangeStart = parseInt(document.getElementById('gameRangeStart').value) || 1;
         const gRangeEnd = parseInt(document.getElementById('gameRangeEnd').value) || 500;
         const pool = words.filter(w => w[0] >= gRangeStart && w[0] <= gRangeEnd);
-        gameDistractorPool = pool;
+        gameDistractorPool = pool; // cache for showGameQuestion — avoids re-filtering per question
         gameDeck = shuffle(weightedPool(pool));
         gameTotalQ = gameLen === 99 ? gameDeck.length : Math.min(gameLen, gameDeck.length);
         gameDeck = gameDeck.slice(0, gameTotalQ);
@@ -14317,7 +14388,10 @@
       }
 
       function showGameQuestion() {
-        if (gameQIdx >= gameDeck.length || gameLives <= 0) { endGame(); return; }
+        if (gameQIdx >= gameDeck.length || gameLives <= 0) {
+          endGame();
+          return;
+        }
         gameLocked = false;
         document.getElementById('gameFeedback').textContent = '';
         document.getElementById('gameFeedback').className = 'game-feedback';
@@ -14369,7 +14443,7 @@
           gameMultiplier = Math.min(5, 1 + Math.floor(gameStreakCount / 3));
           const pts = 10 * gameMultiplier;
           gameScore += pts;
-          fb.textContent = `+${pts}${gameMultiplier > 1 ? ' (×' + gameMultiplier + ' streak!)' : ''}`;
+          fb.textContent = `+${pts}${gameMultiplier>1?' (×'+gameMultiplier+' streak!)':''}`;
           fb.className = 'game-feedback correct';
           const pill = document.getElementById('gameStreakPill');
           pill.classList.remove('bump');
@@ -14398,21 +14472,21 @@
           total: gameQIdx,
           livesLeft: gameLives,
           lsKey: LS_GAME_HS,
-          statHTML: `<strong>${gameScore} pts</strong>${gameQIdx} questions · ${Math.max(0, gameLives)} lives left`,
+          statHTML: `
+																													<strong>${gameScore} pts</strong>${gameQIdx} questions · ${Math.max(0,gameLives)} lives left`,
           outOfLives: gameLives <= 0,
           breakdown: null,
         });
       }
-
       // ── MATCH PAIRS ──────────────────────────────────────────────────────────────
-      const MATCH_PAIRS = 8;
-      const MATCH_TIME = 60;
+      const MATCH_PAIRS = 8; // tiles per round
+      const MATCH_TIME = 60; // seconds per round
       let matchDeck = [];
       let matchRound = 0;
       let matchTotalRounds = 5;
       let matchScore = 0;
-      let matchSelectedRu = null;
-      let matchSelectedEn = null;
+      let matchSelectedRu = null; // {rank, el}
+      let matchSelectedEn = null; // {rank, el}
       let matchMatchedCount = 0;
       let matchTimerId = null;
       let matchTimeLeft = MATCH_TIME;
@@ -14439,7 +14513,10 @@
       }
 
       function startMatchRound() {
-        if (matchRound >= matchTotalRounds || gameLives <= 0) { endMatchGame(); return; }
+        if (matchRound >= matchTotalRounds || gameLives <= 0) {
+          endMatchGame();
+          return;
+        }
         clearInterval(matchTimerId);
         matchSelectedRu = null;
         matchSelectedEn = null;
@@ -14454,6 +14531,7 @@
         enCol.innerHTML = '';
         const ruOrder = shuffle([...roundWords]);
         const enOrder = shuffle([...roundWords]);
+        // Batch insert with DocumentFragment for better performance
         const ruFrag = document.createDocumentFragment();
         const enFrag = document.createDocumentFragment();
         ruOrder.forEach(w => {
@@ -14474,7 +14552,7 @@
         });
         ruCol.appendChild(ruFrag);
         enCol.appendChild(enFrag);
-        document.getElementById('matchRoundLabel').textContent = `Round ${matchRound + 1} of ${matchTotalRounds}`;
+        document.getElementById('matchRoundLabel').textContent = `Round ${matchRound+1} of ${matchTotalRounds}`;
         document.getElementById('matchPairsLeft').textContent = `${MATCH_PAIRS} pairs left`;
         document.getElementById('matchFeedback').textContent = '';
         document.getElementById('matchFeedback').className = 'match-feedback';
@@ -14514,6 +14592,7 @@
         if (tile.classList.contains('matched') || tile.classList.contains('locked')) return;
         const side = tile.dataset.side;
         const rank = parseInt(tile.dataset.rank);
+        // Deselect same-side tile
         if (side === 'ru') {
           if (matchSelectedRu && matchSelectedRu.el === tile) {
             tile.classList.remove('selected');
@@ -14522,7 +14601,10 @@
           }
           if (matchSelectedRu) matchSelectedRu.el.classList.remove('selected');
           tile.classList.add('selected');
-          matchSelectedRu = { rank, el: tile };
+          matchSelectedRu = {
+            rank,
+            el: tile
+          };
         } else {
           if (matchSelectedEn && matchSelectedEn.el === tile) {
             tile.classList.remove('selected');
@@ -14531,25 +14613,30 @@
           }
           if (matchSelectedEn) matchSelectedEn.el.classList.remove('selected');
           tile.classList.add('selected');
-          matchSelectedEn = { rank, el: tile };
+          matchSelectedEn = {
+            rank,
+            el: tile
+          };
         }
+        // Check for match if both sides selected
         if (matchSelectedRu && matchSelectedEn) {
           const correct = matchSelectedRu.rank === matchSelectedEn.rank;
           if (correct) {
+            // Matched!
             [matchSelectedRu.el, matchSelectedEn.el].forEach(el => {
               el.classList.remove('selected');
               el.classList.add('matched');
             });
             matchMatchedCount++;
             matchRoundCorrect++;
-            const pts = 15 + (matchTimeLeft > 30 ? 5 : 0);
+            const pts = 15 + (matchTimeLeft > 30 ? 5 : 0); // bonus for speed
             matchScore += pts;
             gameScore = matchScore;
             recordGrade(matchSelectedRu.rank, true);
             const fb = document.getElementById('matchFeedback');
             fb.textContent = `✓ Match! +${pts}`;
             fb.className = 'match-feedback correct';
-            document.getElementById('matchPairsLeft').textContent = `${MATCH_PAIRS - matchMatchedCount} pairs left`;
+            document.getElementById('matchPairsLeft').textContent = `${MATCH_PAIRS-matchMatchedCount} pairs left`;
             matchSelectedRu = null;
             matchSelectedEn = null;
             updateGameHUD();
@@ -14560,9 +14647,13 @@
               gameScore = matchScore;
               updateGameHUD();
               fb.textContent = `🎉 Round clear! +${bonus} time bonus`;
-              setTimeout(() => { matchRound++; startMatchRound(); }, 1500);
+              setTimeout(() => {
+                matchRound++;
+                startMatchRound();
+              }, 1500);
             }
           } else {
+            // Wrong pair — flash both tiles
             matchWrongCount++;
             recordGrade(matchSelectedRu.rank, false);
             [matchSelectedRu.el, matchSelectedEn.el].forEach(el => {
@@ -14577,7 +14668,9 @@
             matchSelectedRu = null;
             matchSelectedEn = null;
             setTimeout(() => {
-              [wrongRuEl, wrongEnEl].forEach(el => el.classList.remove('wrong-flash', 'locked'));
+              [wrongRuEl, wrongEnEl].forEach(el => {
+                el.classList.remove('wrong-flash', 'locked');
+              });
             }, 500);
           }
         }
@@ -14593,13 +14686,26 @@
           total: matchRound,
           livesLeft: gameLives,
           lsKey: LS_MATCH_HS,
-          statHTML: `<strong>${matchScore} pts</strong>${matchRound} rounds · ${Math.max(0, gameLives)} lives left`,
+          statHTML: `
+																													<strong>${matchScore} pts</strong>${matchRound} rounds · ${Math.max(0,gameLives)} lives left`,
           outOfLives: gameLives <= 0,
-          breakdown: { pairs: totalPairs, accuracy, bonus: Math.round(matchScore - (totalPairs * 15)) },
+          breakdown: {
+            pairs: totalPairs,
+            accuracy,
+            bonus: Math.round(matchScore - (totalPairs * 15)),
+          },
         });
       }
-
-      function showGameResults({ score, total, livesLeft, lsKey, statHTML, outOfLives, breakdown }) {
+      // ── Shared results renderer ──────────────────────────────────────────────────
+      function showGameResults({
+        score,
+        total,
+        livesLeft,
+        lsKey,
+        statHTML,
+        outOfLives,
+        breakdown
+      }) {
         document.getElementById('gameResults').style.display = 'flex';
         const pct = score > 0 ? Math.min(100, Math.round(score / (total * (gameType === 'match' ? 15 : 10)) * 100)) : 0;
         const emoji = outOfLives ? '💀' : pct >= 90 ? '🏆' : pct >= 70 ? '🎉' : pct >= 50 ? '💪' : '📚';
@@ -14611,9 +14717,19 @@
         if (breakdown) {
           bdEl.style.display = 'grid';
           bdEl.innerHTML = `
-            <div class="gr-kpi"><div class="gr-kpi-val">${breakdown.pairs}</div><div class="gr-kpi-lbl">Pairs Matched</div></div>
-            <div class="gr-kpi"><div class="gr-kpi-val">${breakdown.accuracy}%</div><div class="gr-kpi-lbl">Accuracy</div></div>
-            <div class="gr-kpi"><div class="gr-kpi-val">+${Math.max(0, breakdown.bonus)}</div><div class="gr-kpi-lbl">Time Bonus</div></div>`;
+      
+																													<div class="gr-kpi">
+																														<div class="gr-kpi-val">${breakdown.pairs}</div>
+																														<div class="gr-kpi-lbl">Pairs Matched</div>
+																													</div>
+																													<div class="gr-kpi">
+																														<div class="gr-kpi-val">${breakdown.accuracy}%</div>
+																														<div class="gr-kpi-lbl">Accuracy</div>
+																													</div>
+																													<div class="gr-kpi">
+																														<div class="gr-kpi-val">+${Math.max(0,breakdown.bonus)}</div>
+																														<div class="gr-kpi-lbl">Time Bonus</div></div>
+    `;
         } else {
           bdEl.style.display = 'none';
         }
@@ -14628,7 +14744,7 @@
         }
         if (pct >= 70) spawnConfetti();
       }
-
+      // ── Setup event listeners ────────────────────────────────────────────────────
       document.getElementById('gameTypeRow').addEventListener('click', e => {
         const card = e.target.closest('.game-type-card');
         if (!card) return;
@@ -14657,11 +14773,8 @@
         showGameSetup();
       });
       document.getElementById('closeGameBtn').addEventListener('click', () => {
-        if (
-          document.getElementById('gameQuestionWrap').style.display !== 'none' ||
-          document.getElementById('matchWrap').style.display !== 'none' ||
-          document.getElementById('snakeWrap').style.display !== 'none'
-        ) {
+        // Only confirm if a game is actually in progress
+        if (document.getElementById('gameQuestionWrap').style.display !== 'none' || document.getElementById('matchWrap').style.display !== 'none' || document.getElementById('snakeWrap').style.display !== 'none') {
           showExitConfirm(() => {
             document.getElementById('gameOverlay').classList.remove('active');
             clearInterval(matchTimerId);
@@ -14677,11 +14790,11 @@
           clearConfetti();
         }
       });
+      // Event delegation for match tiles (more efficient than per-tile listeners)
       document.getElementById('matchWrap').addEventListener('click', e => {
         const tile = e.target.closest('.match-tile');
         if (tile) matchTileClick(tile);
       });
-
       // ── EXIT CONFIRM ─────────────────────────────────────────────────────────────
       let exitConfirmCallback = null;
 
@@ -14694,17 +14807,16 @@
         document.getElementById('exitConfirmBackdrop').classList.remove('visible');
         exitConfirmCallback = null;
       }
-
       document.getElementById('exitConfirmCancel').addEventListener('click', hideExitConfirm);
       document.getElementById('exitConfirmLeave').addEventListener('click', () => {
         const cb = exitConfirmCallback;
         hideExitConfirm();
         if (cb) cb();
       });
+      // Close on backdrop click
       document.getElementById('exitConfirmBackdrop').addEventListener('click', e => {
         if (e.target === e.currentTarget) hideExitConfirm();
       });
-
       // ════════════════════════════════════════════════════════════════════════════
       // SNAKE GAME
       // ════════════════════════════════════════════════════════════════════════════
@@ -14716,39 +14828,71 @@
       let snakeParticles = [];
       let snakePopups = [];
       let snakeLastLifeBonus = 0;
-      const PELLET_COLORS = [
-        { key: 'R', fill: 'rgba(248,113,113,.35)', stroke: '#f87171', glow: 'rgba(248,113,113,.7)' },
-        { key: 'G', fill: 'rgba(74,222,128,.35)',  stroke: '#4ade80', glow: 'rgba(74,222,128,.7)'  },
-        { key: 'B', fill: 'rgba(96,165,250,.35)',  stroke: '#60a5fa', glow: 'rgba(96,165,250,.7)'  },
-      ];
-      const CELL = 28;
+      const PELLET_COLORS = [{
+        key: 'R',
+        fill: 'rgba(248,113,113,.35)',
+        stroke: '#f87171',
+        glow: 'rgba(248,113,113,.7)'
+      }, {
+        key: 'G',
+        fill: 'rgba(74,222,128,.35)',
+        stroke: '#4ade80',
+        glow: 'rgba(74,222,128,.7)'
+      }, {
+        key: 'B',
+        fill: 'rgba(96,165,250,.35)',
+        stroke: '#60a5fa',
+        glow: 'rgba(96,165,250,.7)'
+      }, ];
+      const CELL = 28; // px per grid cell
+      function snakeCanvas() {
+        return document.getElementById('snakeCanvas');
+      }
 
-      function snakeCanvas() { return document.getElementById('snakeCanvas'); }
-      function snakeCols() { return Math.floor(snakeCanvas().width / CELL); }
-      function snakeRows() { return Math.floor(snakeCanvas().height / CELL); }
+      function snakeCols() {
+        return Math.floor(snakeCanvas().width / CELL);
+      }
 
+      function snakeRows() {
+        return Math.floor(snakeCanvas().height / CELL);
+      }
+      // ── Rounded-rect path (cross-browser) ───────────────────────────────────────
       function rrPath(ctx, x, y, w, h, r) {
         r = Math.min(r, w / 2, h / 2);
         if (typeof ctx.roundRect === 'function') {
-          ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return;
+          ctx.beginPath();
+          ctx.roundRect(x, y, w, h, r);
+          return;
         }
         ctx.beginPath();
         ctx.moveTo(x + r, y);
-        ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-        ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-        ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-        ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
         ctx.closePath();
       }
 
-      function snakeEaseOut(t) { return 1 - (1 - t) * (1 - t); }
-
+      function snakeEaseOut(t) {
+        return 1 - (1 - t) * (1 - t);
+      }
+      // ── Start / Stop ─────────────────────────────────────────────────────────────
       function startSnakeGame() {
-        const stepMs = { 10: 300, 20: 170, 40: 100, 99: 58 }[gameLen] ?? 170;
+        const stepMs = {
+          10: 300,
+          20: 170,
+          40: 100,
+          99: 58
+        } [gameLen] ?? 170;
         const gS = parseInt(document.getElementById('gameRangeStart').value) || 1;
         const gE = parseInt(document.getElementById('gameRangeEnd').value) || 500;
         const pool = shuffle(words.filter(w => w[0] >= gS && w[0] <= gE));
         if (pool.length < 3) return;
+        // Size canvas to fit overlay
         const wrap = document.getElementById('snakeWrap');
         wrap.style.display = 'flex';
         const cvs = snakeCanvas();
@@ -14757,6 +14901,7 @@
         const rows = Math.min(20, Math.max(10, Math.floor((window.innerHeight * 0.50) / CELL)));
         cvs.width = cols * CELL;
         cvs.height = rows * CELL;
+        // Show game UI, hide others
         document.getElementById('gameSetup').style.display = 'none';
         document.getElementById('gameQuestionWrap').style.display = 'none';
         document.getElementById('matchWrap').style.display = 'none';
@@ -14766,13 +14911,37 @@
         document.getElementById('gameLives').textContent = '❤️❤️❤️';
         document.getElementById('gameStreakPill').style.display = 'none';
         document.getElementById('snakePauseOverlay').classList.remove('visible');
-        const midCol = Math.floor(cols / 2), midRow = Math.floor(rows / 2);
+        const midCol = Math.floor(cols / 2),
+          midRow = Math.floor(rows / 2);
         snakeState = {
-          body: [{ x: midCol, y: midRow }, { x: midCol - 1, y: midRow }, { x: midCol - 2, y: midRow }],
-          dir: { x: 1, y: 0 }, nextDir: { x: 1, y: 0 },
-          pellets: [], pool, wordIdx: 0, current: null,
-          score: 0, lives: 3, streak: 0, stepMs,
-          flashAlpha: 0, flashRgb: '34,197,94',
+          body: [{
+            x: midCol,
+            y: midRow
+          }, {
+            x: midCol - 1,
+            y: midRow
+          }, {
+            x: midCol - 2,
+            y: midRow
+          }],
+          dir: {
+            x: 1,
+            y: 0
+          },
+          nextDir: {
+            x: 1,
+            y: 0
+          },
+          pellets: [],
+          pool,
+          wordIdx: 0,
+          current: null,
+          score: 0,
+          lives: 3,
+          streak: 0,
+          stepMs,
+          flashAlpha: 0,
+          flashRgb: '34,197,94',
         };
         snakePaused = false;
         snakeParticles = [];
@@ -14785,7 +14954,10 @@
       }
 
       function stopSnake() {
-        if (snakeRaf) { cancelAnimationFrame(snakeRaf); snakeRaf = null; }
+        if (snakeRaf) {
+          cancelAnimationFrame(snakeRaf);
+          snakeRaf = null;
+        }
         snakeState = null;
         snakePaused = false;
         snakeParticles = [];
@@ -14793,7 +14965,7 @@
         const pill = document.getElementById('gameStreakPill');
         if (pill) pill.style.display = '';
       }
-
+      // ── Question / Pellet spawning ────────────────────────────────────────────────
       function snakeNextQuestion() {
         const s = snakeState;
         if (!s || !s.pool || s.pool.length === 0) return;
@@ -14801,19 +14973,33 @@
         if (!w) return;
         s.wordIdx++;
         s.current = w;
-        document.getElementById('snakeWordPrompt').textContent = w[2] || '';
-        const distractors = [], used = new Set([w[0]]);
+        document.getElementById('snakeWordPrompt').textContent = w[2] || ''; // English word
+        // Pick 2 distractors (different from correct)
+        const distractors = [],
+          used = new Set([w[0]]);
         let safety = 0;
         while (distractors.length < 2 && safety++ < 500) {
           const d = s.pool[Math.floor(Math.random() * s.pool.length)];
-          if (d && !used.has(d[0])) { used.add(d[0]); distractors.push(d); }
+          if (d && !used.has(d[0])) {
+            used.add(d[0]);
+            distractors.push(d);
+          }
         }
+        // Pad distractors with copies of w if pool too small
         while (distractors.length < 2) distractors.push(w);
-        const candidates = shuffle([{ word: w, correct: true }, ...distractors.map(d => ({ word: d, correct: false }))]);
-        const cols = snakeCols(), rows = snakeRows();
+        const candidates = shuffle([{
+          word: w,
+          correct: true
+        }, ...distractors.map(d => ({
+          word: d,
+          correct: false
+        })), ]);
+        const cols = snakeCols(),
+          rows = snakeRows();
         const bodySet = new Set(s.body.map(b => `${b.x},${b.y}`));
         const placed = [];
         const now = performance.now();
+        // Populate choices panel with large Russian words + color dots
         ['R', 'G', 'B'].forEach((key, i) => {
           const c = candidates[i];
           const el = document.getElementById('snakeChoiceWord' + key);
@@ -14829,13 +15015,22 @@
             y = Math.floor(Math.random() * rows);
             tries++;
           } while ((bodySet.has(`${x},${y}`) || placed.some(p => p.x === x && p.y === y)) && tries < 300);
-          placed.push({ x, y, colorKey: PELLET_COLORS[i].key, correct: cand.correct, born: now });
+          placed.push({
+            x,
+            y,
+            colorKey: PELLET_COLORS[i].key,
+            correct: cand.correct,
+            born: now
+          });
         });
         s.pellets = placed;
       }
-
+      // ── Game loop ─────────────────────────────────────────────────────────────────
       function snakeTick(ts) {
-        if (!snakeState) { snakeRaf = null; return; }
+        if (!snakeState) {
+          snakeRaf = null;
+          return;
+        }
         snakeRaf = requestAnimationFrame(snakeTick);
         snakeDraw(ts);
         if (snakePaused) return;
@@ -14846,17 +15041,32 @@
 
       function snakeMove() {
         const s = snakeState;
-        s.dir = { ...s.nextDir };
-        const head = { x: s.body[0].x + s.dir.x, y: s.body[0].y + s.dir.y };
-        const cols = snakeCols(), rows = snakeRows();
-        if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) { snakeHitBad(); return; }
-        if (s.body.some(b => b.x === head.x && b.y === head.y)) { snakeHitBad(); return; }
+        s.dir = {
+          ...s.nextDir
+        };
+        const head = {
+          x: s.body[0].x + s.dir.x,
+          y: s.body[0].y + s.dir.y
+        };
+        const cols = snakeCols(),
+          rows = snakeRows();
+        if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
+          snakeHitBad();
+          return;
+        }
+        if (s.body.some(b => b.x === head.x && b.y === head.y)) {
+          snakeHitBad();
+          return;
+        }
         s.body.unshift(head);
         const hitIdx = s.pellets.findIndex(p => p.x === head.x && p.y === head.y);
         if (hitIdx >= 0) {
           const hit = s.pellets[hitIdx];
           if (hit.correct) snakeEatCorrect(head);
-          else { s.body.pop(); snakeEatWrong(head); }
+          else {
+            s.body.pop();
+            snakeEatWrong(head);
+          }
         } else {
           s.body.pop();
         }
@@ -14870,6 +15080,7 @@
         s.score += pts;
         gameScore = s.score;
         document.getElementById('gameScoreVal').textContent = s.score;
+        // +1 life every 100 points, max 3
         const milestone = Math.floor(s.score / 100);
         if (milestone > snakeLastLifeBonus) {
           snakeLastLifeBonus = milestone;
@@ -14877,14 +15088,27 @@
             s.lives = Math.min(3, s.lives + 1);
             gameLives = s.lives;
             document.getElementById('gameLives').textContent = '❤️'.repeat(Math.max(0, s.lives)) + '🖤'.repeat(Math.max(0, 3 - s.lives));
-            snakePopups.push({ text: '+1 Life!', x: snakeCanvas().width / 2, y: snakeCanvas().height / 2, color: '#fb7185', born: performance.now() });
+            snakePopups.push({
+              text: '+1 Life!',
+              x: snakeCanvas().width / 2,
+              y: snakeCanvas().height / 2,
+              color: '#fb7185',
+              born: performance.now(),
+            });
           }
         }
+        // Gradually accelerate every 4 correct answers
         if (s.streak % 4 === 0) s.stepMs = Math.max(50, s.stepMs - 6);
         s.flashAlpha = 0.18;
         s.flashRgb = '34,197,94';
         snakeEmitParticles(pos.x, pos.y, true);
-        snakePopups.push({ text: `+${pts}${s.streak > 2 ? ' 🔥' : ''}`, x: pos.x * CELL + CELL / 2, y: pos.y * CELL, color: '#4ade80', born: performance.now() });
+        snakePopups.push({
+          text: `+${pts}${s.streak>2?' 🔥':''}`,
+          x: pos.x * CELL + CELL / 2,
+          y: pos.y * CELL,
+          color: '#4ade80',
+          born: performance.now(),
+        });
         const correctPellet = s.pellets.find(pp => pp.correct);
         if (correctPellet) {
           const row = document.getElementById('snakeChoice' + correctPellet.colorKey);
@@ -14900,7 +15124,13 @@
         s.flashAlpha = 0.28;
         s.flashRgb = '239,68,68';
         snakeEmitParticles(pos.x, pos.y, false);
-        snakePopups.push({ text: '✗', x: pos.x * CELL + CELL / 2, y: pos.y * CELL, color: '#f87171', born: performance.now() });
+        snakePopups.push({
+          text: '✗',
+          x: pos.x * CELL + CELL / 2,
+          y: pos.y * CELL,
+          color: '#f87171',
+          born: performance.now(),
+        });
         const wrongPellet = s.pellets.find(pp => pp.x === pos.x && pp.y === pos.y);
         if (wrongPellet) {
           const row = document.getElementById('snakeChoice' + wrongPellet.colorKey);
@@ -14925,20 +15155,41 @@
         s.lives--;
         gameLives = s.lives;
         document.getElementById('gameLives').textContent = '❤️'.repeat(Math.max(0, s.lives)) + '🖤'.repeat(Math.max(0, 3 - s.lives));
-        if (s.lives <= 0) { endSnakeGame(); return; }
+        if (s.lives <= 0) {
+          endSnakeGame();
+          return;
+        }
+        // Pause and show overlay while snake respawns
         snakePaused = true;
         const ov = document.getElementById('snakePauseOverlay');
         ov.querySelector('.snake-pause-title').textContent = ['💀 Life Lost', '💔 Life Lost', '⚡ Life Lost'][Math.floor(Math.random() * 3)];
         ov.querySelector('.snake-pause-sub').textContent = 'Respawning…';
         ov.classList.add('visible');
-        const cols = snakeCols(), rows = snakeRows();
-        const midCol = Math.floor(cols / 2), midRow = Math.floor(rows / 2);
+        const cols = snakeCols(),
+          rows = snakeRows();
+        const midCol = Math.floor(cols / 2),
+          midRow = Math.floor(rows / 2);
         setTimeout(() => {
           if (!snakeState) return;
-          snakeState.body = [{ x: midCol, y: midRow }, { x: midCol - 1, y: midRow }, { x: midCol - 2, y: midRow }];
-          snakeState.dir = { x: 1, y: 0 };
-          snakeState.nextDir = { x: 1, y: 0 };
-          snakeNextQuestion();
+          snakeState.body = [{
+            x: midCol,
+            y: midRow
+          }, {
+            x: midCol - 1,
+            y: midRow
+          }, {
+            x: midCol - 2,
+            y: midRow
+          }];
+          snakeState.dir = {
+            x: 1,
+            y: 0
+          };
+          snakeState.nextDir = {
+            x: 1,
+            y: 0
+          };
+          snakeNextQuestion(); // fresh pellets on respawn
           snakePaused = false;
           ov.querySelector('.snake-pause-title').textContent = '⏸ Paused';
           ov.querySelector('.snake-pause-sub').textContent = 'Press Space or tap to resume';
@@ -14953,13 +15204,18 @@
         const hs = parseInt(localStorage.getItem(LS_SNAKE_HS) || '0');
         if (score > hs) localStorage.setItem(LS_SNAKE_HS, score);
         showGameResults({
-          score, total: learned, livesLeft: 0, lsKey: LS_SNAKE_HS,
-          statHTML: `<strong>${score} pts</strong>${learned} words answered`,
-          outOfLives: true, breakdown: null,
+          score,
+          total: learned,
+          livesLeft: 0,
+          lsKey: LS_SNAKE_HS,
+          statHTML: `
+																																	<strong>${score} pts</strong>${learned} words answered`,
+          outOfLives: true,
+          breakdown: null,
         });
         document.getElementById('snakeWrap').style.display = 'none';
       }
-
+      // ── Particles ─────────────────────────────────────────────────────────────────
       function snakeEmitParticles(cx, cy, correct) {
         const n = correct ? 12 : 7;
         const colors = correct ? ['#4ade80', '#86efac', '#fbbf24', '#a78bfa'] : ['#f87171', '#fca5a5', '#ef4444'];
@@ -14967,28 +15223,38 @@
           const angle = (Math.PI * 2 * i / n) + (Math.random() - .5) * .9;
           const speed = 1.8 + Math.random() * 3.2;
           snakeParticles.push({
-            x: cx * CELL + CELL / 2, y: cy * CELL + CELL / 2,
-            vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+            x: cx * CELL + CELL / 2,
+            y: cy * CELL + CELL / 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
             color: colors[Math.floor(Math.random() * colors.length)],
-            born: performance.now(), life: 480 + Math.random() * 320, size: 2 + Math.random() * 2.5,
+            born: performance.now(),
+            life: 480 + Math.random() * 320,
+            size: 2 + Math.random() * 2.5,
           });
         }
       }
-
+      // ── Drawing ───────────────────────────────────────────────────────────────────
       function snakeDraw(ts) {
         const s = snakeState;
         if (!s) return;
         const cvs = snakeCanvas();
         const ctx = cvs.getContext('2d');
-        const W = cvs.width, H = cvs.height;
+        const W = cvs.width,
+          H = cvs.height;
         const now = performance.now();
+        // Background
         ctx.fillStyle = '#080c1a';
         ctx.fillRect(0, 0, W, H);
+        // Dot grid
         ctx.fillStyle = 'rgba(124,58,237,0.07)';
         for (let gx = CELL / 2; gx < W; gx += CELL)
           for (let gy = CELL / 2; gy < H; gy += CELL) {
-            ctx.beginPath(); ctx.arc(gx, gy, 1.1, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath();
+            ctx.arc(gx, gy, 1.1, 0, Math.PI * 2);
+            ctx.fill();
           }
+        // Particles
         snakeParticles = snakeParticles.filter(p => {
           const age = (now - p.born) / p.life;
           if (age >= 1) return false;
@@ -14999,56 +15265,90 @@
           return true;
         });
         ctx.globalAlpha = 1;
+        // Pellets — colored circles, no text
         s.pellets.forEach((p, i) => {
           const age = Math.min(1, (now - p.born) / 240);
           const scale = age < 1 ? snakeEaseOut(age) : 1;
           const pulse = 0.92 + 0.08 * Math.sin(ts * .0025 + i * 1.9);
           const col = PELLET_COLORS.find(c => c.key === p.colorKey) || PELLET_COLORS[0];
-          const cx = p.x * CELL + CELL / 2, cy = p.y * CELL + CELL / 2;
+          const cx = p.x * CELL + CELL / 2;
+          const cy = p.y * CELL + CELL / 2;
           const r = CELL * 0.38 * scale * pulse;
           ctx.save();
-          ctx.shadowColor = col.glow; ctx.shadowBlur = 18;
-          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2);
-          ctx.fillStyle = col.fill; ctx.fill();
+          ctx.shadowColor = col.glow;
+          ctx.shadowBlur = 18;
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fillStyle = col.fill;
+          ctx.fill();
           ctx.shadowBlur = 0;
-          ctx.strokeStyle = col.stroke; ctx.lineWidth = 2.5; ctx.stroke();
+          ctx.strokeStyle = col.stroke;
+          ctx.lineWidth = 2.5;
+          ctx.stroke();
           ctx.restore();
         });
+        // Snake body
         const bodyLen = s.body.length;
         s.body.forEach((seg, i) => {
-          const t = i / Math.max(1, bodyLen - 1), isHead = (i === 0);
+          const t = i / Math.max(1, bodyLen - 1),
+            isHead = (i === 0);
           ctx.save();
-          if (isHead) { ctx.shadowColor = 'rgba(196,181,253,.9)'; ctx.shadowBlur = 20; }
+          if (isHead) {
+            ctx.shadowColor = 'rgba(196,181,253,.9)';
+            ctx.shadowBlur = 20;
+          }
+          // Violet→purple gradient head→tail
           const r = Math.round(196 - (196 - 76) * t);
           const g = Math.round(181 - (181 - 29) * t);
           const b = Math.round(253 - (253 - 149) * t);
           const a = 1 - t * .35;
           ctx.fillStyle = `rgba(${r},${g},${b},${a})`;
-          const pad = isHead ? 1 : 2.5, rad = isHead ? 8 : 5;
+          const pad = isHead ? 1 : 2.5,
+            rad = isHead ? 8 : 5;
           rrPath(ctx, seg.x * CELL + pad, seg.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, rad);
           ctx.fill();
           ctx.shadowBlur = 0;
+          // Eyes on head
           if (isHead) {
-            const { x: dx, y: dy } = s.dir;
+            const {
+              x: dx,
+              y: dy
+            } = s.dir;
             if (dx !== 0 || dy !== 0) {
-              const cx = seg.x * CELL + CELL / 2, cy = seg.y * CELL + CELL / 2;
-              const fwd = CELL * .15, side = CELL * .22;
-              [{ ex: cx + dx * fwd - dy * side, ey: cy + dy * fwd + dx * side },
-               { ex: cx + dx * fwd + dy * side, ey: cy + dy * fwd - dx * side }].forEach(({ ex, ey }) => {
+              const cx = seg.x * CELL + CELL / 2,
+                cy = seg.y * CELL + CELL / 2;
+              const fwd = CELL * .15,
+                side = CELL * .22;
+              [{
+                ex: cx + dx * fwd - dy * side,
+                ey: cy + dy * fwd + dx * side
+              }, {
+                ex: cx + dx * fwd + dy * side,
+                ey: cy + dy * fwd - dx * side
+              }].forEach(({
+                ex,
+                ey
+              }) => {
                 ctx.fillStyle = 'white';
-                ctx.beginPath(); ctx.arc(ex, ey, 3.2, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath();
+                ctx.arc(ex, ey, 3.2, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.fillStyle = '#1e1b4b';
-                ctx.beginPath(); ctx.arc(ex + dx * .9, ey + dy * .9, 1.6, 0, Math.PI * 2); ctx.fill();
+                ctx.beginPath();
+                ctx.arc(ex + dx * .9, ey + dy * .9, 1.6, 0, Math.PI * 2);
+                ctx.fill();
               });
             }
           }
           ctx.restore();
         });
+        // Flash overlay
         if (s.flashAlpha > 0) {
           ctx.fillStyle = `rgba(${s.flashRgb},${s.flashAlpha})`;
           ctx.fillRect(0, 0, W, H);
           s.flashAlpha = Math.max(0, s.flashAlpha - .022);
         }
+        // Score popups (floating "+N" text)
         snakePopups = snakePopups.filter(p => {
           const age = (now - p.born) / 900;
           if (age >= 1) return false;
@@ -15057,19 +15357,26 @@
           ctx.font = `800 13px 'Inter',sans-serif`;
           ctx.textAlign = 'center';
           ctx.fillStyle = p.color;
-          ctx.shadowColor = p.color; ctx.shadowBlur = 8;
+          ctx.shadowColor = p.color;
+          ctx.shadowBlur = 8;
           ctx.fillText(p.text, p.x, p.y - age * 38);
           ctx.restore();
           return true;
         });
       }
-
+      // ── Input handling ────────────────────────────────────────────────────────────
       function snakeSetDir(dx, dy) {
         if (!snakeState || snakePaused) return;
-        const { x, y } = snakeState.dir;
+        const {
+          x,
+          y
+        } = snakeState.dir;
         if (dx === 1 && x === -1 || dx === -1 && x === 1) return;
         if (dy === 1 && y === -1 || dy === -1 && y === 1) return;
-        snakeState.nextDir = { x: dx, y: dy };
+        snakeState.nextDir = {
+          x: dx,
+          y: dy
+        };
       }
 
       function snakeTogglePause() {
@@ -15078,61 +15385,102 @@
         const ov = document.getElementById('snakePauseOverlay');
         const btn = document.getElementById('dPause');
         if (btn) btn.textContent = snakePaused ? '▶' : '⏸';
-        ov.querySelector('.snake-pause-title').textContent = '⏸ Paused';
+        ov.querySelector('.snake-pause-title').textContent = snakePaused ? '⏸ Paused' : '⏸ Paused';
         ov.classList.toggle('visible', snakePaused);
       }
-
       window.addEventListener('keydown', e => {
         const wrap = document.getElementById('snakeWrap');
         if (!snakeState || !wrap || wrap.style.display === 'none') return;
-        const map = { ArrowUp: [0, -1], w: [0, -1], ArrowDown: [0, 1], s: [0, 1], ArrowLeft: [-1, 0], a: [-1, 0], ArrowRight: [1, 0], d: [1, 0] };
-        if (map[e.key]) { e.preventDefault(); snakeSetDir(...map[e.key]); return; }
-        if (e.key === ' ' || e.key === 'Escape') { e.preventDefault(); snakeTogglePause(); }
-      }, { passive: false });
-
+        const map = {
+          ArrowUp: [0, -1],
+          w: [0, -1],
+          ArrowDown: [0, 1],
+          s: [0, 1],
+          ArrowLeft: [-1, 0],
+          a: [-1, 0],
+          ArrowRight: [1, 0],
+          d: [1, 0]
+        };
+        if (map[e.key]) {
+          e.preventDefault();
+          snakeSetDir(...map[e.key]);
+          return;
+        }
+        if (e.key === ' ' || e.key === 'Escape') {
+          e.preventDefault();
+          snakeTogglePause();
+        }
+      }, {
+        passive: false
+      });
+      // D-pad button bindings
       ['dUp', 'dDown', 'dLeft', 'dRight', 'dPause'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
-        const dirs = { dUp: [0, -1], dDown: [0, 1], dLeft: [-1, 0], dRight: [1, 0] };
+        const dirs = {
+          dUp: [0, -1],
+          dDown: [0, 1],
+          dLeft: [-1, 0],
+          dRight: [1, 0]
+        };
         if (dirs[id]) el.addEventListener('click', () => snakeSetDir(...dirs[id]));
         else el.addEventListener('click', snakeTogglePause);
       });
-
+      // Touch swipe on canvas
       (() => {
         const cvs = document.getElementById('snakeCanvas');
         if (!cvs) return;
-        let tx = 0, ty = 0;
-        cvs.addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+        let tx = 0,
+          ty = 0;
+        cvs.addEventListener('touchstart', e => {
+          tx = e.touches[0].clientX;
+          ty = e.touches[0].clientY;
+        }, {
+          passive: true
+        });
         cvs.addEventListener('touchend', e => {
-          const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
-          if (Math.abs(dx) < 12 && Math.abs(dy) < 12) { snakeTogglePause(); return; }
+          const dx = e.changedTouches[0].clientX - tx,
+            dy = e.changedTouches[0].clientY - ty;
+          if (Math.abs(dx) < 12 && Math.abs(dy) < 12) {
+            snakeTogglePause();
+            return;
+          }
           if (Math.abs(dx) > Math.abs(dy)) snakeSetDir(dx > 0 ? 1 : -1, 0);
           else snakeSetDir(0, dy > 0 ? 1 : -1);
-        }, { passive: true });
+        }, {
+          passive: true
+        });
       })();
-
       // ════════════════════════════════════════════════════════════════════════════
       // END SNAKE GAME
       // ════════════════════════════════════════════════════════════════════════════
-
-      loadQuizSettings();
-
-      // ── SWIPE ───────────────────────────────────────────────────────────────────
-      let drag = false, startX = 0, curX = 0, swipeCard = null;
+      // SWIPE
+      let drag = false,
+        startX = 0,
+        curX = 0,
+        swipeCard = null;
       quizCardWrap.addEventListener('pointerdown', e => {
-        drag = true; startX = e.clientX;
+        drag = true;
+        startX = e.clientX;
         swipeCard = document.getElementById('quizCard');
-      }, { passive: true });
+      }, {
+        passive: true
+      });
       window.addEventListener('pointermove', e => {
         if (!drag || !swipeCard) return;
         curX = e.clientX - startX;
         swipeCard.style.transition = 'none';
-        swipeCard.style.transform = `translateX(${curX}px) rotate(${curX * .04}deg)`;
-      }, { passive: true });
+        swipeCard.style.transform = `translateX(${curX}px) rotate(${curX*.04}deg)`;
+      }, {
+        passive: true
+      });
       window.addEventListener('pointerup', () => {
         if (!drag) return;
         drag = false;
-        if (!swipeCard) { curX = 0; return; }
+        if (!swipeCard) {
+          curX = 0;
+          return;
+        }
         swipeCard.style.transition = 'transform .4s cubic-bezier(.175,.885,.32,1.275)';
         const swipeThreshold = window.innerWidth * 0.28;
         if (curX > swipeThreshold) grade(true);
@@ -15140,12 +15488,16 @@
         else swipeCard.style.transform = 'translateX(0) rotate(0)';
         curX = 0;
         swipeCard = null;
-      }, { passive: true });
-
+      }, {
+        passive: true
+      });
+      // Cancel audio/TTS and pause quiz when user switches tab or locks screen
       let quizPaused = false;
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
           sharedAudio.pause();
+          // no speechSynthesis used
+          // Pause quiz: freeze the card mid-swipe and block grading
           if (ov.classList.contains('active') && quizIndex < (quizDeck || []).length) {
             quizPaused = true;
             drag = false;
@@ -15157,105 +15509,6 @@
           quizPaused = false;
         }
       });
-
-      // ════════════════════════════════════════════════════════════════════════════
-      // TELEGRAM SYNC
-      // ════════════════════════════════════════════════════════════════════════════
-      (function initTelegramSync() {
-        const tg = window.Telegram?.WebApp;
-        if (!tg) return; // not running inside Telegram, skip silently
-
-        tg.ready();
-        tg.expand();
-
-        // Only show sync UI when the bot opens the Mini App with ?startapp=sync
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('startapp') !== 'sync') return;
-
-        // Collect all progress from localStorage using the exact keys this app uses
-        function collectProgress() {
-          return {
-            stats:     JSON.parse(localStorage.getItem('rv_stats_v1')    || '[]'),
-            activity:  JSON.parse(localStorage.getItem('rv_activity_v1') || '{}'),
-            srs:       JSON.parse(localStorage.getItem('rv_srs_v1')      || '{}'),
-            firstOpen: localStorage.getItem('rv_first_open_v1')          || '',
-          };
-        }
-
-        // Build summary for display
-        const data = collectProgress();
-        const statsSeen   = Array.isArray(data.stats) ? data.stats.length : Object.keys(data.stats).length;
-        const activityDays = Object.keys(data.activity).length;
-        const totalCards   = Object.values(data.activity).reduce((a, b) => a + b, 0);
-
-        // Create a floating sync banner fixed to bottom of screen
-        const banner = document.createElement('div');
-        banner.id = 'tgSyncBanner';
-        banner.style.cssText = [
-          'position:fixed', 'bottom:0', 'left:0', 'right:0', 'z-index:99999',
-          'padding:16px 20px 20px', 'background:rgba(10,6,25,0.97)',
-          'border-top:1px solid rgba(124,58,237,0.5)',
-          'display:flex', 'flex-direction:column', 'gap:10px',
-          'box-shadow:0 -8px 40px rgba(0,0,0,0.6)',
-          'font-family:Inter,system-ui,sans-serif',
-        ].join(';');
-
-        banner.innerHTML = `
-          <div style="text-align:center;color:#c4b5fd;font-size:.8rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase">
-            📤 Sync to Telegram Bot
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
-            <div style="background:rgba(124,58,237,0.15);border-radius:10px;padding:8px 4px">
-              <div style="color:#e2d9f3;font-size:1.1rem;font-weight:700">${statsSeen}</div>
-              <div style="color:#7c6fad;font-size:.7rem">words seen</div>
-            </div>
-            <div style="background:rgba(124,58,237,0.15);border-radius:10px;padding:8px 4px">
-              <div style="color:#e2d9f3;font-size:1.1rem;font-weight:700">${activityDays}</div>
-              <div style="color:#7c6fad;font-size:.7rem">active days</div>
-            </div>
-            <div style="background:rgba(124,58,237,0.15);border-radius:10px;padding:8px 4px">
-              <div style="color:#e2d9f3;font-size:1.1rem;font-weight:700">${totalCards}</div>
-              <div style="color:#7c6fad;font-size:.7rem">cards done</div>
-            </div>
-          </div>
-          <button id="tgSyncBtn" style="
-            background:linear-gradient(135deg,#7c3aed,#6d28d9);
-            color:#fff;border:none;border-radius:14px;
-            padding:15px;font-size:1rem;font-weight:700;
-            cursor:pointer;width:100%;letter-spacing:.01em;
-            box-shadow:0 4px 20px rgba(109,40,217,0.5);
-          ">📤 Send My Progress to Bot</button>
-          <div id="tgSyncStatus" style="color:#a78bfa;font-size:.8rem;text-align:center;min-height:1.1em"></div>
-        `;
-
-        document.body.appendChild(banner);
-
-        // Pad page bottom so banner doesn't cover content
-        document.body.style.paddingBottom = '220px';
-
-        document.getElementById('tgSyncBtn').addEventListener('click', () => {
-          const btn    = document.getElementById('tgSyncBtn');
-          const status = document.getElementById('tgSyncStatus');
-          btn.disabled = true;
-          btn.textContent = '⏳ Sending…';
-          btn.style.opacity = '0.7';
-
-          try {
-            const payload = JSON.stringify(collectProgress());
-            tg.sendData(payload); // fires handle_web_app_data in the bot
-            status.textContent = '✅ Sent! Check your Telegram chat.';
-            btn.textContent = '✅ Done!';
-            btn.style.background = 'linear-gradient(135deg,#16a34a,#15803d)';
-            btn.style.opacity = '1';
-          } catch (err) {
-            console.error('TG sendData error:', err);
-            status.textContent = '❌ Error: ' + err.message;
-            btn.disabled = false;
-            btn.textContent = '📤 Send My Progress to Bot';
-            btn.style.opacity = '1';
-          }
-        });
-      })();
-      // ════════════════════════════════════════════════════════════════════════════
-      // END TELEGRAM SYNC
-      // ════════════════════════════════════════════════════════════════════════════
+    </script>
+  </body>
+</html>
