@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""
+Russian Vocabulary Progress Bot — Telegram Mini App edition
+============================================================
+No local server. No copy-pasting. No console.
+
+How it works:
+  1. User taps "🔄 Sync Progress" in the bot
+  2. The vocab web app opens INSIDE Telegram as a Mini App
+  3. App detects startapp=sync, shows a one-tap "Send My Progress" button
+  4. User taps it → app calls Telegram.WebApp.sendData()
+  5. Bot receives data instantly via web_app_data handler
+  6. Bot replies with full stats + inline keyboards ✅
+
+Setup:
+  pip install python-telegram-bot==20.7
+  Set BOT_TOKEN and WEB_APP_URL below, then: python russian_vocab_bot.py
+
+WEB_APP_URL: the HTTPS URL where your index.html is hosted.
+  Free options: GitHub Pages, Netlify, Vercel
+"""
+
+import os, json, math, logging
+from datetime import date, timedelta
+
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+from telegram.ext import (
+    Application, CommandHandler, CallbackQueryHandler,
+    MessageHandler, ContextTypes, filters,
+)
+
+# ── CONFIG ────────────────────────────────────────────────────────────────────
+BOT_TOKEN   = os.environ.get("TELEGRAM_BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+WEB_APP_URL = os.environ.get("WEB_APP_URL",        "https://YOUR-SITE.com/")
+# WEB_APP_URL must be HTTPS. Point it to wherever your index.html is hosted.
+
+logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+user_data_store: dict = {}   # user_id -> parsed stats dict
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def today_str():
+    return date.today().isoformat()
+
+def calc_streak(activity):
+    d = date.today()
+    if not activity.get(today_str()): d -= timedelta(days=1)
+    streak = 0
+    while activity.get(d.isoformat()):
+        streak += 1; d -= timedelta(days=1)
+    return streak
+
+def get_weak_words(stats):
+    weak = [(r, s) for r, s in stats.items() if s.get("misses", 0) > 0]
+    weak.sort(key=lambda x: x[1]["misses"], reverse=True)
+    return weak
+
+def get_due_words(srs):
+    today = today_str()
+    return [(r, s) for r, s in srs.items() if s.get("due", "9999") <= today]
+
+def get_accuracy(stats):
+    tc = sum(s.get("correct", 0) for s in stats.values())
+    tm = sum(s.get("misses",  0) for s in stats.values())
+    return tc / (tc + tm) * 100 if (tc + tm) > 0 else 0.0
+
+def progress_bar(value, total, width=10):
+    filled = round(value / total * width) if total > 0 else 0
+    return "█" * filled + "░" * (width - filled)
+
+def parse_raw_data(body):
+    raw = body.get("stats", [])
+    if isinstance(raw, list):   stats = {str(r): s for r, s in raw}
+    elif isinstance(raw, dict): stats = {str(k): v for k, v in raw.items()}
+    else:                       stats = {}
+    return {
+        "stats":     stats,
+        "activity":  body.get("activity", {}),
+        "srs":       {str(k): v for k, v in body.get("srs", {}).items()},
+        "firstOpen": body.get("firstOpen", ""),
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VIEW BUILDERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def build_overview(data):
+    stats = data.get("stats", {}); activity = data.get("activity", {})
+    srs   = data.get("srs",   {}); first    = data.get("firstOpen", "unknown")
+    seen  = len(stats)
+    correct = sum(s.get("correct", 0) for s in stats.values())
+    misses  = sum(s.get("misses",  0) for s in stats.values())
+    return (
+        f"📊 <b>Your Progress Overview</b>\n{'─'*30}\n\n"
+        f"📚 <b>Words studied:</b> {seen:,} / 10,000\n"
+        f"   {progress_bar(seen, 10000)} {seen/100:.1f}%\n\n"
+        f"✅ <b>Correct:</b> {correct:,}   ❌ <b>Mistakes:</b> {misses:,}\n"
+        f"🎯 <b>Accuracy:</b> {get_accuracy(stats):.1f}%\n\n"
+        f"🔥 <b>Streak:</b> {calc_streak(activity)} days\n"
+        f"⚠️ <b>Weak words:</b> {len(get_weak_words(stats))}   "
+        f"🕐 <b>SRS due:</b> {len(get_due_words(srs))}\n\n"
+        f"📅 <b>Studying since:</b> {first}"
+    )
+
+def build_streak(data):
+    activity = data.get("activity", {})
+    streak   = calc_streak(activity)
+    dots = {"0":"⬜","1":"🟦","2":"🟪","3":"🔮","4":"💜"}
+    lines = []
+    for i in range(13, -1, -1):
+        d   = date.today() - timedelta(days=i)
+        cnt = activity.get(d.isoformat(), 0)
+        lv  = "0" if cnt==0 else "1" if cnt<5 else "2" if cnt<15 else "3" if cnt<30 else "4"
+        lines.append(f"{dots[lv]} {d.strftime('%a %d')}  {cnt} cards{'  ← today' if i==0 else ''}")
+    fire = "🔥"*min(streak,5) if streak else "💤"
+    return (
+        f"🔥 <b>Streak & Activity</b>\n{'─'*30}\n\n"
+        f"{fire} <b>{streak}-day streak</b>\n\n"
+        f"📆 Active days: {len(activity)}   📇 Total cards: {sum(activity.values()):,}\n\n"
+        f"<b>Last 14 days:</b>\n" + "\n".join(lines)
+    )
+
+def build_activity(data):
+    activity = data.get("activity", {})
+    if not activity: return "📅 No activity recorded yet."
+    best_key = max(activity, key=lambda k: activity[k])
+    days = [(  (date.today()-timedelta(days=6-i)).isoformat(),
+                activity.get((date.today()-timedelta(days=6-i)).isoformat(), 0)  ) for i in range(7)]
+    mx    = max(c for _, c in days) or 1
+    chart = "\n".join(f"{d[5:]}  {'█'*round(c/mx*8):<8} {c}" for d, c in days)
+    return (
+        f"📅 <b>Activity Report</b>\n{'─'*30}\n\n"
+        f"📌 Today: {activity.get(today_str(), 0)} cards\n"
+        f"🏅 Best: {best_key} ({activity[best_key]} cards)\n"
+        f"📈 Daily avg: {sum(activity.values())/len(activity):.1f} cards\n\n"
+        f"<b>Last 7 days:</b>\n<code>{chart}</code>"
+    )
+
+def build_srs_due(data):
+    srs = data.get("srs", {}); due = get_due_words(srs)
+    if not due: return "✅ <b>No words due!</b>\n\nAll caught up on SRS 🎉"
+    due.sort(key=lambda x: x[1].get("due", today_str()))
+    lines = [f"🕐 <b>SRS Queue — {len(due)} words due</b>\n{'─'*30}\n"]
+    for rank, s in due[:15]:
+        due_date = s.get("due", "?")
+        try:    overdue = (date.today() - date.fromisoformat(due_date)).days
+        except: overdue = 0
+        emoji = "💪" if s.get("ease",2.5)>=2.5 else "😰" if s.get("ease",2.5)<1.8 else "😐"
+        lines.append(f"  {emoji} Word <b>#{rank}</b>  interval={s.get('interval',1)}d  "
+                     f"({'overdue '+str(overdue)+'d' if overdue>0 else 'due today'})")
+    if len(due) > 15: lines.append(f"\n  ...and {len(due)-15} more")
+    return "\n".join(lines)
+
+def build_weak_words(data, page=0):
+    weak = get_weak_words(data.get("stats", {}))
+    if not weak: return "✅ <b>No weak words!</b>\n\nNo mistakes yet 🎉", 1
+    page_size   = 10
+    total_pages = math.ceil(len(weak) / page_size)
+    page        = max(0, min(page, total_pages-1))
+    lines = [f"⚠️ <b>Weak Words</b> (page {page+1}/{total_pages})\n{'─'*30}\n",
+             f"Mistakes on <b>{len(weak)}</b> words total.\n"]
+    for rank, s in weak[page*10:(page+1)*10]:
+        correct = s.get("correct",0); misses = s.get("misses",0); total = correct+misses
+        acc = correct/total*100 if total else 0
+        lines.append(f"  📌 <b>#{rank}</b>  ❌{misses} ✅{correct}  {progress_bar(correct,total,5)} {acc:.0f}%")
+    return "\n".join(lines), total_pages
+
+def build_top_words(data):
+    stats = data.get("stats", {})
+    if not stats: return "🏆 No study history yet!"
+    top = sorted(stats.items(), key=lambda x: x[1].get("correct",0)+x[1].get("misses",0), reverse=True)[:10]
+    lines = [f"🏆 <b>Most Reviewed Words</b>\n{'─'*30}\n"]
+    for rank, s in top:
+        correct=s.get("correct",0); misses=s.get("misses",0); total=correct+misses
+        acc=correct/total*100 if total else 0
+        emoji="🌟" if acc>=90 else "✅" if acc>=70 else "⚠️" if acc>=50 else "❌"
+        lines.append(f"  {emoji} Word <b>#{rank}</b>  {total} reviews  {acc:.0f}% acc")
+    return "\n".join(lines)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# KEYBOARDS
+# ══════════════════════════════════════════════════════════════════════════════
+
+def sync_url():
+    return WEB_APP_URL.rstrip("/") + "?startapp=sync"
+
+def main_menu_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📊 Overview",   callback_data="overview"),
+         InlineKeyboardButton("🔥 Streak",     callback_data="streak")],
+        [InlineKeyboardButton("📅 Activity",   callback_data="activity"),
+         InlineKeyboardButton("🧠 SRS Due",    callback_data="srs_due")],
+        [InlineKeyboardButton("⚠️ Weak Words", callback_data="weak_words"),
+         InlineKeyboardButton("🏆 Top Words",  callback_data="top_words")],
+        [InlineKeyboardButton("🔄 Sync Progress", web_app=WebAppInfo(url=sync_url()))],
+    ])
+
+def back_keyboard():
+    return InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back to Menu", callback_data="main_menu")]])
+
+def weak_keyboard(page, total_pages):
+    row = []
+    if page > 0:             row.append(InlineKeyboardButton("⬅ Prev", callback_data=f"weak_page_{page-1}"))
+    if page < total_pages-1: row.append(InlineKeyboardButton("Next ➡", callback_data=f"weak_page_{page+1}"))
+    buttons = [row] if row else []
+    buttons.append([InlineKeyboardButton("⬅️ Back to Menu", callback_data="main_menu")])
+    return InlineKeyboardMarkup(buttons)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HANDLERS
+# ══════════════════════════════════════════════════════════════════════════════
+
+NO_DATA = (
+    "📭 <b>No data synced yet!</b>\n\n"
+    "Tap <b>🔄 Sync Progress</b> — the vocab app opens inside Telegram.\n"
+    "Tap <b>Send My Progress</b> and your stats appear here instantly!\n\n"
+    "No copy-pasting. No console. One tap. 🎉"
+)
+
+async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    name = update.effective_user.first_name or "there"
+    await update.message.reply_html(
+        f"Привет, {name}! 👋\n\n🇷🇺 <b>Russian Vocabulary Progress Bot</b>\n\n"
+        f"I track your progress in the <b>10,000 Russian Words</b> Mini App.\n\n"
+        f"Tap <b>🔄 Sync Progress</b> to import your data in one tap!",
+        reply_markup=main_menu_keyboard(),
+    )
+
+async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = user_data_store.get(update.effective_user.id)
+    await update.message.reply_html(
+        "📋 <b>Main Menu</b>" if data else NO_DATA,
+        reply_markup=main_menu_keyboard(),
+    )
+
+async def handle_web_app_data(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Fires when Mini App calls Telegram.WebApp.sendData() — the magic handler."""
+    user_id = update.effective_user.id
+    try:
+        body = json.loads(update.effective_message.web_app_data.data)
+    except Exception:
+        await update.message.reply_html("❌ Received invalid data from the app.")
+        return
+
+    data = parse_raw_data(body)
+    user_data_store[user_id] = data
+
+    stats    = data.get("stats", {})
+    activity = data.get("activity", {})
+    await update.message.reply_html(
+        f"✅ <b>Progress synced!</b>\n\n"
+        f"📚 <b>{len(stats):,}</b> words in history\n"
+        f"🔥 <b>{calc_streak(activity)}-day</b> streak\n\n"
+        + build_overview(data),
+        reply_markup=main_menu_keyboard(),
+    )
+
+async def safe_edit(query, text: str, reply_markup=None):
+    """Edit a message, silently ignoring 'Message is not modified' errors."""
+    try:
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=reply_markup)
+    except Exception as e:
+        if "not modified" in str(e).lower():
+            pass  # same content — not a real error, just ignore
+        else:
+            raise
+
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query   = update.callback_query
+    await query.answer()
+    user_id = update.effective_user.id
+    data    = user_data_store.get(user_id)
+    cb      = query.data
+
+    if cb == "main_menu":
+        await safe_edit(query, "📋 <b>Main Menu</b>" if data else NO_DATA, main_menu_keyboard())
+        return
+
+    if not data:
+        await safe_edit(query, NO_DATA, main_menu_keyboard())
+        return
+
+    if   cb == "overview":  await safe_edit(query, build_overview(data),  back_keyboard())
+    elif cb == "streak":    await safe_edit(query, build_streak(data),    back_keyboard())
+    elif cb == "activity":  await safe_edit(query, build_activity(data),  back_keyboard())
+    elif cb == "srs_due":   await safe_edit(query, build_srs_due(data),   back_keyboard())
+    elif cb == "top_words": await safe_edit(query, build_top_words(data), back_keyboard())
+    elif cb == "weak_words":
+        text, total = build_weak_words(data, 0)
+        await safe_edit(query, text, weak_keyboard(0, total))
+    elif cb.startswith("weak_page_"):
+        page = int(cb.split("_")[-1])
+        text, total = build_weak_words(data, page)
+        await safe_edit(query, text, weak_keyboard(page, total))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAIN
+# ══════════════════════════════════════════════════════════════════════════════
+
+def main():
+    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE":
+        print("⚠️  Set BOT_TOKEN on line 38 or via env var TELEGRAM_BOT_TOKEN"); return
+    if "YOUR-SITE" in WEB_APP_URL:
+        print("⚠️  Set WEB_APP_URL on line 39 to your HTTPS hosting URL"); return
+
+    app = Application.builder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", cmd_start))
+    app.add_handler(CommandHandler("menu",  cmd_menu))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_web_app_data))
+    app.add_handler(CallbackQueryHandler(button_callback))
+
+    print("🤖 Bot is running! Press Ctrl+C to stop.")
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
+
+if __name__ == "__main__":
+    main()
