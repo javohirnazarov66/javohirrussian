@@ -13614,8 +13614,27 @@ function playSafariTTS(word, onDone) {
         return `${y}-${m}-${day}`;
       }
 
+      // ── PERSISTENCE ───────────────────────────────────────────────────────────────
+      function saveStats() {
+        try {
+          localStorage.setItem(LS_KEY,      JSON.stringify([...stats.entries()]));
+          localStorage.setItem(LS_ACTIVITY, JSON.stringify(activity));
+          localStorage.setItem(LS_SRS,      JSON.stringify(srsData));
+        } catch (e) { console.error('saveStats failed:', e); }
+      }
 
-
+      function loadStats() {
+        try {
+          const raw = localStorage.getItem(LS_KEY);
+          if (raw) stats = new Map(JSON.parse(raw));
+          activity  = JSON.parse(localStorage.getItem(LS_ACTIVITY) || '{}');
+          srsData   = JSON.parse(localStorage.getItem(LS_SRS)      || '{}');
+          firstOpenDate = localStorage.getItem(LS_FIRST_OPEN) || todayStr();
+          if (!localStorage.getItem(LS_FIRST_OPEN)) {
+            localStorage.setItem(LS_FIRST_OPEN, firstOpenDate);
+          }
+        } catch (e) { console.error('loadStats failed:', e); }
+      }
 
 
       function recordGrade(rank, correct) {
@@ -13648,6 +13667,7 @@ function playSafariTTS(word, onDone) {
         srs.due = localDateStr(dueDate);
         srsData[rank] = srs;
         updateStreakUI();
+        saveStats();
       }
 
       function clearStats() {
@@ -13820,6 +13840,7 @@ function playSafariTTS(word, onDone) {
         document.getElementById('btnReviewWeak').style.display = weak ? 'inline-flex' : 'none';
         document.getElementById('btnClearStats').style.display = totalSeen ? 'inline-flex' : 'none';
       }
+      loadStats();
       updateStreakUI();
       // ── SESSION LENGTH ─────────────────────────────────────────────────────────────
       let sessionLen = 0; // 0 = all
