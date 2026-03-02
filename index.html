@@ -14837,12 +14837,18 @@ function playSafariTTS(word, onDone) {
       document.getElementById('closeGameBtn').addEventListener('click', () => {
         // Only confirm if a game is actually in progress
         if (document.getElementById('gameQuestionWrap').style.display !== 'none' || document.getElementById('matchWrap').style.display !== 'none' || document.getElementById('snakeWrap').style.display !== 'none') {
+          // Pause snake while confirm dialog is open
+          const snakeWasRunning = document.getElementById('snakeWrap').style.display !== 'none' && snakeState && !snakePaused;
+          if (snakeWasRunning) snakePaused = true;
           showExitConfirm(() => {
             document.getElementById('gameOverlay').classList.remove('active');
             clearInterval(matchTimerId);
             stopSnake();
             sharedAudio.pause();
             clearConfetti();
+          }, () => {
+            // User chose to stay — resume snake if it was running
+            if (snakeWasRunning) snakePaused = false;
           });
         } else {
           document.getElementById('gameOverlay').classList.remove('active');
@@ -14859,17 +14865,24 @@ function playSafariTTS(word, onDone) {
       });
       // ── EXIT CONFIRM ─────────────────────────────────────────────────────────────
       let exitConfirmCallback = null;
+      let exitConfirmStayCallback = null;
 
-      function showExitConfirm(onLeave) {
+      function showExitConfirm(onLeave, onStay) {
         exitConfirmCallback = onLeave;
+        exitConfirmStayCallback = onStay || null;
         document.getElementById('exitConfirmBackdrop').classList.add('visible');
       }
 
       function hideExitConfirm() {
         document.getElementById('exitConfirmBackdrop').classList.remove('visible');
         exitConfirmCallback = null;
+        exitConfirmStayCallback = null;
       }
-      document.getElementById('exitConfirmCancel').addEventListener('click', hideExitConfirm);
+      document.getElementById('exitConfirmCancel').addEventListener('click', () => {
+        const cb = exitConfirmStayCallback;
+        hideExitConfirm();
+        if (cb) cb();
+      });
       document.getElementById('exitConfirmLeave').addEventListener('click', () => {
         const cb = exitConfirmCallback;
         hideExitConfirm();
@@ -14877,7 +14890,11 @@ function playSafariTTS(word, onDone) {
       });
       // Close on backdrop click
       document.getElementById('exitConfirmBackdrop').addEventListener('click', e => {
-        if (e.target === e.currentTarget) hideExitConfirm();
+        if (e.target === e.currentTarget) {
+          const cb = exitConfirmStayCallback;
+          hideExitConfirm();
+          if (cb) cb();
+        }
       });
       // ════════════════════════════════════════════════════════════════════════════
       // SNAKE GAME
@@ -14945,11 +14962,11 @@ function playSafariTTS(word, onDone) {
       // ── Start / Stop ─────────────────────────────────────────────────────────────
       function startSnakeGame() {
         const stepMs = {
-          10: 300,
-          20: 170,
-          40: 100,
-          99: 58
-        } [gameLen] ?? 170;
+          10: 380,
+          20: 220,
+          40: 130,
+          99: 75
+        } [gameLen] ?? 220;
         const gS = parseInt(document.getElementById('gameRangeStart').value) || 1;
         const gE = parseInt(document.getElementById('gameRangeEnd').value) || 500;
         const pool = shuffle(words.filter(w => w[0] >= gS && w[0] <= gE));
@@ -14958,9 +14975,9 @@ function playSafariTTS(word, onDone) {
         const wrap = document.getElementById('snakeWrap');
         wrap.style.display = 'flex';
         const cvs = snakeCanvas();
-        const maxW = Math.min(wrap.clientWidth - 32, 520);
+        const maxW = Math.min(wrap.clientWidth - 16, 720);
         const cols = Math.floor(maxW / CELL);
-        const rows = Math.min(20, Math.max(10, Math.floor((window.innerHeight * 0.50) / CELL)));
+        const rows = Math.min(28, Math.max(14, Math.floor((window.innerHeight * 0.64) / CELL)));
         cvs.width = cols * CELL;
         cvs.height = rows * CELL;
         // Show game UI, hide others
