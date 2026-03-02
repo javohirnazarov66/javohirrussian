@@ -2875,6 +2875,114 @@
         box-shadow: 0 6px 20px rgba(220, 38, 38, .5);
         transform: translateY(-1px);
       }
+
+      /* ── FALLING WORDS GAME ── */
+      .falling-wrap {
+        width: 100%;
+        max-width: 540px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: .65rem;
+        padding: 0 1rem 1.5rem;
+        box-sizing: border-box;
+      }
+
+      .falling-banner {
+        width: 100%;
+        background: linear-gradient(135deg, rgba(124,58,237,.18), rgba(236,72,153,.08));
+        border: 1px solid rgba(124,58,237,.4);
+        border-radius: 14px;
+        padding: .65rem 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: .75rem;
+        flex-wrap: wrap;
+        min-height: 50px;
+        box-shadow: 0 0 20px rgba(124,58,237,.1);
+      }
+
+      .falling-banner-lbl {
+        font-size: .6rem;
+        font-weight: 700;
+        letter-spacing: .14em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        white-space: nowrap;
+      }
+
+      .falling-banner-word {
+        font-family: 'Playfair Display', serif;
+        font-size: 1.35rem;
+        font-weight: 700;
+        color: white;
+        text-shadow: 0 0 14px rgba(255,255,255,.2);
+      }
+
+      .falling-arena-wrap {
+        position: relative;
+        width: 100%;
+        border-radius: 16px;
+        overflow: hidden;
+        background: #080c1a;
+        border: 1px solid rgba(124,58,237,.25);
+        box-shadow: 0 10px 50px rgba(0,0,0,.7), inset 0 0 30px rgba(124,58,237,.04);
+      }
+
+      .falling-arena {
+        position: relative;
+        width: 100%;
+        height: 340px;
+      }
+
+      .falling-lane-line {
+        position: absolute;
+        top: 0; bottom: 0;
+        width: 1px;
+        background: rgba(255,255,255,.05);
+      }
+
+      .falling-word-el {
+        position: absolute;
+        border-radius: 14px;
+        padding: .7rem .5rem;
+        text-align: center;
+        font-family: 'Playfair Display', serif;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: white;
+        cursor: pointer;
+        user-select: none;
+        will-change: top;
+        transition: transform .1s, background .15s, border-color .15s;
+        box-sizing: border-box;
+      }
+
+      .falling-word-el:active {
+        transform: scale(0.94);
+      }
+
+      .falling-danger-zone {
+        position: absolute;
+        bottom: 0; left: 0; right: 0;
+        height: 48px;
+        background: linear-gradient(to top, rgba(248,113,113,.08), transparent);
+        pointer-events: none;
+      }
+
+      /* Mobile-only / desktop-only game type visibility */
+      .game-type-card[data-type="snake"].mobile-only { display: none; }
+      .game-type-card[data-type="falling"] { display: none; }
+
+      @media(max-width: 768px) {
+        .game-type-card[data-type="snake"]:not(.mobile-only) { display: none; }
+        .game-type-card[data-type="falling"] { display: flex; }
+
+        .falling-arena {
+          height: 300px;
+        }
+      }
     </style>
   <body>
     <div class="ambient-bg"></div>
@@ -3095,6 +3203,11 @@
             <div class="game-type-name">Snake</div>
             <div class="game-type-desc">Eat the correct Russian translation · dodge the wrong ones</div>
           </div>
+          <div class="game-type-card" data-type="falling">
+            <div class="game-type-icon">🌧️</div>
+            <div class="game-type-name">Falling Words</div>
+            <div class="game-type-desc">Tap the correct translation before it hits the bottom</div>
+          </div>
         </div>
         <div class="game-setup-label" id="gameDirLabel">Direction</div>
         <div class="game-setup-row" id="gameDirRow">
@@ -3206,6 +3319,20 @@
             <div class="snake-dpad-empty"></div>
             <button class="snake-dpad-btn" id="dDown">▼</button>
             <div class="snake-dpad-empty"></div>
+          </div>
+        </div>
+      </div>
+      <!-- FALLING WORDS SCREEN -->
+      <div class="falling-wrap" id="fallingWrap" style="display:none">
+        <div class="falling-banner">
+          <span class="falling-banner-lbl">Tap Russian for:</span>
+          <span class="falling-banner-word" id="fallingWordPrompt">—</span>
+        </div>
+        <div class="falling-arena-wrap">
+          <div class="falling-arena" id="fallingArena">
+            <div class="falling-lane-line" style="left:33.3%"></div>
+            <div class="falling-lane-line" style="left:66.6%"></div>
+            <div class="falling-danger-zone"></div>
           </div>
         </div>
       </div>
@@ -14365,10 +14492,12 @@ function playSafariTTS(word, onDone) {
       function showGameSetup() {
         clearInterval(matchTimerId);
         stopSnake();
+        stopFalling();
         document.getElementById('gameSetup').style.display = 'flex';
         document.getElementById('gameQuestionWrap').style.display = 'none';
         document.getElementById('matchWrap').style.display = 'none';
         document.getElementById('snakeWrap').style.display = 'none';
+        document.getElementById('fallingWrap').style.display = 'none';
         document.getElementById('gameResults').style.display = 'none';
         document.querySelector('.game-hud').style.opacity = '.35';
         updateSetupHintForType();
@@ -14377,13 +14506,14 @@ function playSafariTTS(word, onDone) {
       function updateSetupHintForType() {
         const isMC = gameType === 'multichoice';
         const isSnake = gameType === 'snake';
-        document.getElementById('gameSetupHint').textContent = isMC ? '3 lives · streak multiplier up to ×5 · high score saved' : isSnake ? 'Eat the correct Russian translation · avoid the wrong ones · 3 lives' : 'Match all pairs before time runs out · 8 pairs per round';
+        const isFalling = gameType === 'falling';
+        document.getElementById('gameSetupHint').textContent = isMC ? '3 lives · streak multiplier up to ×5 · high score saved' : isSnake ? 'Eat the correct Russian translation · avoid the wrong ones · 3 lives' : isFalling ? 'Tap the correct word before it hits the bottom · 3 lives · streak bonus' : 'Match all pairs before time runs out · 8 pairs per round';
         document.getElementById('gameDirLabel').style.display = isMC ? '' : 'none';
         document.getElementById('gameDirRow').style.display = isMC ? '' : 'none';
         document.getElementById('gameLenLabel').style.display = '';
         document.getElementById('gameLenRow').style.display = '';
         const lenBtns = document.querySelectorAll('#gameLenRow .qs-btn');
-        if (isSnake) {
+        if (isSnake || isFalling) {
           document.getElementById('gameLenLabel').textContent = 'Speed';
           const labels = ['Slow', 'Normal', 'Fast', 'Turbo'];
           lenBtns.forEach((b, i) => {
@@ -14417,6 +14547,7 @@ function playSafariTTS(word, onDone) {
         if (gE - gS + 1 < gameRangeMin()) return;
         if (gameType === 'multichoice') startGame();
         else if (gameType === 'snake') startSnakeGame();
+        else if (gameType === 'falling') startFallingGame();
         else startMatchGame();
       }
       // ── MULTIPLE CHOICE ──────────────────────────────────────────────────────────
@@ -14836,24 +14967,29 @@ function playSafariTTS(word, onDone) {
       });
       document.getElementById('closeGameBtn').addEventListener('click', () => {
         // Only confirm if a game is actually in progress
-        if (document.getElementById('gameQuestionWrap').style.display !== 'none' || document.getElementById('matchWrap').style.display !== 'none' || document.getElementById('snakeWrap').style.display !== 'none') {
-          // Pause snake while confirm dialog is open
+        if (document.getElementById('gameQuestionWrap').style.display !== 'none' || document.getElementById('matchWrap').style.display !== 'none' || document.getElementById('snakeWrap').style.display !== 'none' || document.getElementById('fallingWrap').style.display !== 'none') {
+          // Pause snake/falling while confirm dialog is open
           const snakeWasRunning = document.getElementById('snakeWrap').style.display !== 'none' && snakeState && !snakePaused;
+          const fallingWasRunning = document.getElementById('fallingWrap').style.display !== 'none' && fallingState && !fallingState.paused;
           if (snakeWasRunning) snakePaused = true;
+          if (fallingWasRunning) fallingState.paused = true;
           showExitConfirm(() => {
             document.getElementById('gameOverlay').classList.remove('active');
             clearInterval(matchTimerId);
             stopSnake();
+            stopFalling();
             sharedAudio.pause();
             clearConfetti();
           }, () => {
-            // User chose to stay — resume snake if it was running
+            // User chose to stay — resume if was running
             if (snakeWasRunning) snakePaused = false;
+            if (fallingWasRunning && fallingState) fallingState.paused = false;
           });
         } else {
           document.getElementById('gameOverlay').classList.remove('active');
           clearInterval(matchTimerId);
           stopSnake();
+          stopFalling();
           sharedAudio.pause();
           clearConfetti();
         }
@@ -14896,6 +15032,251 @@ function playSafariTTS(word, onDone) {
           if (cb) cb();
         }
       });
+      // ════════════════════════════════════════════════════════════════════════════
+      // FALLING WORDS GAME
+      // ════════════════════════════════════════════════════════════════════════════
+      let fallingState = null;
+      let fallingRaf = null;
+      const FALLING_COLORS = [
+        { bg: 'rgba(248,113,113,.18)', border: '#f87171', glow: 'rgba(248,113,113,.5)' },
+        { bg: 'rgba(74,222,128,.18)',  border: '#4ade80', glow: 'rgba(74,222,128,.5)' },
+        { bg: 'rgba(96,165,250,.18)',  border: '#60a5fa', glow: 'rgba(96,165,250,.5)' },
+      ];
+
+      function startFallingGame() {
+        const speedPx = { 10: 0.9, 20: 1.5, 40: 2.2, 99: 3.2 }[gameLen] ?? 1.5;
+        const gS = parseInt(document.getElementById('gameRangeStart').value) || 1;
+        const gE = parseInt(document.getElementById('gameRangeEnd').value) || 500;
+        const pool = shuffle(words.filter(w => w[0] >= gS && w[0] <= gE));
+        if (pool.length < 3) return;
+
+        document.getElementById('fallingWrap').style.display = 'flex';
+        document.getElementById('gameSetup').style.display = 'none';
+        document.getElementById('gameQuestionWrap').style.display = 'none';
+        document.getElementById('matchWrap').style.display = 'none';
+        document.getElementById('snakeWrap').style.display = 'none';
+        document.getElementById('gameResults').style.display = 'none';
+        document.querySelector('.game-hud').style.opacity = '1';
+        document.getElementById('gameScoreVal').textContent = '0';
+        document.getElementById('gameLives').textContent = '❤️❤️❤️';
+        document.getElementById('gameStreakPill').style.display = 'none';
+
+        // Clear arena
+        const arena = document.getElementById('fallingArena');
+        // Remove old word elements but keep lane lines and danger zone
+        arena.querySelectorAll('.falling-word-el').forEach(el => el.remove());
+
+        fallingState = {
+          pool,
+          poolIdx: 0,
+          lives: 3,
+          score: 0,
+          correct: 0,
+          total: 0,
+          speed: speedPx,
+          baseSpeed: speedPx,
+          words: [],
+          paused: false,
+          currentTarget: null,
+          streak: 0,
+          multiplier: 1,
+          spawning: false,
+        };
+
+        fallingSpawnRound();
+        if (fallingRaf) cancelAnimationFrame(fallingRaf);
+        fallingRaf = requestAnimationFrame(fallingTick);
+      }
+
+      function fallingSpawnRound() {
+        const s = fallingState;
+        if (!s || s.spawning) return;
+        s.spawning = true;
+
+        const arena = document.getElementById('fallingArena');
+        // Remove existing word els
+        s.words.forEach(w => { if (w.el && w.el.parentNode) w.el.remove(); });
+        s.words = [];
+
+        // Pick target + 2 distractors
+        const target = s.pool[s.poolIdx % s.pool.length];
+        s.poolIdx++;
+        const distractors = shuffle(s.pool.filter(w => w[0] !== target[0])).slice(0, 2);
+        const choices = shuffle([
+          { word: target, correct: true },
+          { word: distractors[0], correct: false },
+          { word: distractors[1], correct: false },
+        ]);
+
+        s.currentTarget = target;
+        document.getElementById('fallingWordPrompt').textContent = target[2]; // English
+
+        const arenaW = arena.clientWidth;
+        const laneW = arenaW / 3;
+
+        choices.forEach((choice, laneIdx) => {
+          const col = FALLING_COLORS[laneIdx];
+          const el = document.createElement('div');
+          el.className = 'falling-word-el';
+          const elW = Math.max(60, laneW * 0.78);
+          const leftPx = laneIdx * laneW + (laneW - elW) / 2;
+          el.style.cssText = `
+            left:${leftPx}px;
+            width:${elW}px;
+            top:-90px;
+            background:${col.bg};
+            border:2px solid ${col.border};
+            box-shadow:0 0 14px ${col.glow};
+          `;
+          el.textContent = choice.word[1]; // Russian
+
+          const startY = -90 - laneIdx * 50; // stagger so they don't appear at same time
+          const wordObj = { el, lane: laneIdx, y: startY, correct: choice.correct, rank: choice.word[0], word: choice.word, tapped: false, missed: false };
+
+          el.addEventListener('pointerdown', (e) => { e.preventDefault(); fallingTap(wordObj); });
+          arena.appendChild(el);
+          wordObj.el.style.top = startY + 'px';
+          s.words.push(wordObj);
+        });
+
+        s.spawning = false;
+      }
+
+      function fallingTap(wordObj) {
+        if (!fallingState || wordObj.tapped || wordObj.missed) return;
+        const s = fallingState;
+        wordObj.tapped = true;
+
+        if (wordObj.correct) {
+          s.streak++;
+          s.multiplier = Math.min(5, 1 + Math.floor(s.streak / 3));
+          const pts = 10 * s.multiplier;
+          s.score += pts;
+          s.correct++;
+          s.total++;
+          recordGrade(wordObj.rank, true);
+          document.getElementById('gameScoreVal').textContent = s.score;
+
+          // Update streak pill
+          document.getElementById('gameMulti').textContent = s.multiplier;
+          const pill = document.getElementById('gameStreakPill');
+          pill.style.display = s.multiplier > 1 ? '' : 'none';
+          if (s.multiplier > 1) { pill.classList.remove('bump'); void pill.offsetWidth; pill.classList.add('bump'); }
+
+          // Flash word green
+          wordObj.el.style.background = 'rgba(74,222,128,.55)';
+          wordObj.el.style.borderColor = '#4ade80';
+          wordObj.el.style.transform = 'scale(1.08)';
+
+          // Speed up gently
+          s.speed = Math.min(s.baseSpeed * 2.2, s.speed + 0.12);
+
+          // Mark others as tapped so they don't trigger missed penalty
+          s.words.forEach(w => { if (!w.correct) w.tapped = true; });
+
+          setTimeout(() => { if (fallingState) fallingSpawnRound(); }, 450);
+        } else {
+          // Wrong tap
+          s.streak = 0;
+          s.multiplier = 1;
+          s.lives--;
+          s.total++;
+          recordGrade(s.currentTarget[0], false);
+
+          document.getElementById('gameMulti').textContent = 1;
+          document.getElementById('gameStreakPill').style.display = 'none';
+          wordObj.el.style.background = 'rgba(248,113,113,.55)';
+          wordObj.el.style.borderColor = '#f87171';
+
+          const livesStr = '❤️'.repeat(Math.max(0, s.lives)) + '🖤'.repeat(Math.max(0, 3 - s.lives));
+          document.getElementById('gameLives').textContent = livesStr;
+
+          if (s.lives <= 0) {
+            setTimeout(() => fallingEnd(true), 400);
+            return;
+          }
+
+          // Mark all tapped, respawn
+          s.words.forEach(w => w.tapped = true);
+          setTimeout(() => { if (fallingState) fallingSpawnRound(); }, 500);
+        }
+      }
+
+      function fallingTick(ts) {
+        if (!fallingState) { fallingRaf = null; return; }
+        fallingRaf = requestAnimationFrame(fallingTick);
+        if (fallingState.paused) return;
+
+        const s = fallingState;
+        const arena = document.getElementById('fallingArena');
+        const arenaH = arena.clientHeight;
+        let correctMissed = false;
+
+        s.words.forEach(w => {
+          if (w.tapped || w.missed) return;
+          w.y += s.speed;
+          w.el.style.top = w.y + 'px';
+
+          // Danger zone visual — word turns red-tinted near bottom
+          const distFromBottom = arenaH - (w.y + w.el.offsetHeight);
+          if (distFromBottom < 60 && w.correct) {
+            const intensity = Math.max(0, 1 - distFromBottom / 60);
+            const col = FALLING_COLORS[w.lane];
+            w.el.style.boxShadow = `0 0 ${20 + intensity*20}px rgba(248,113,113,${0.3 + intensity*0.5})`;
+          }
+
+          // Hit bottom
+          if (w.y > arenaH) {
+            w.missed = true;
+            if (w.correct) correctMissed = true;
+            if (w.el && w.el.parentNode) w.el.remove();
+          }
+        });
+
+        if (correctMissed && !s.words.some(w => w.tapped && w.correct)) {
+          // Correct word fell off — lose a life
+          s.streak = 0;
+          s.multiplier = 1;
+          s.lives--;
+          s.total++;
+          recordGrade(s.currentTarget[0], false);
+
+          document.getElementById('gameMulti').textContent = 1;
+          document.getElementById('gameStreakPill').style.display = 'none';
+          const livesStr = '❤️'.repeat(Math.max(0, s.lives)) + '🖤'.repeat(Math.max(0, 3 - s.lives));
+          document.getElementById('gameLives').textContent = livesStr;
+
+          // Mark all as tapped/missed
+          s.words.forEach(w => { w.tapped = true; });
+
+          if (s.lives <= 0) {
+            setTimeout(() => fallingEnd(true), 400);
+            return;
+          }
+          setTimeout(() => { if (fallingState) fallingSpawnRound(); }, 350);
+        }
+      }
+
+      function fallingEnd(outOfLives) {
+        const s = fallingState;
+        if (!s) return;
+        const score = s.score, total = s.total;
+        stopFalling();
+        showGameResults({
+          score, total, livesLeft: outOfLives ? 0 : 1,
+          lsKey: null,
+          statHTML: `Score: <strong>${score}</strong> · Words seen: <strong>${total}</strong>`,
+          outOfLives,
+        });
+      }
+
+      function stopFalling() {
+        if (fallingRaf) { cancelAnimationFrame(fallingRaf); fallingRaf = null; }
+        const arena = document.getElementById('fallingArena');
+        if (arena) arena.querySelectorAll('.falling-word-el').forEach(el => el.remove());
+        fallingState = null;
+        document.getElementById('fallingWrap').style.display = 'none';
+      }
       // ════════════════════════════════════════════════════════════════════════════
       // SNAKE GAME
       // ════════════════════════════════════════════════════════════════════════════
