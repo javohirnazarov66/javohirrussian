@@ -1961,11 +1961,52 @@
           margin-top: 1rem;
         }
 
-        .dw-ru {
-          font-size: 1.3rem;
+        .daily-word-inner {
+          flex-wrap: wrap;
+          gap: .6rem .8rem;
+          padding: 1rem 1.1rem;
+          align-items: flex-start;
         }
 
+        .dw-label {
+          width: 100%;
+          font-size: .58rem;
+        }
 
+        .dw-divider {
+          display: none;
+        }
+
+        .dw-content {
+          flex: 1 1 0;
+          min-width: 0;
+        }
+
+        .dw-ru {
+          font-size: 1.35rem;
+          word-break: break-word;
+          overflow-wrap: anywhere;
+          white-space: normal;
+          line-height: 1.2;
+        }
+
+        .dw-en {
+          font-size: .82rem;
+          margin-top: .2rem;
+          white-space: normal;
+          word-break: break-word;
+        }
+
+        .dw-audio {
+          width: 36px;
+          height: 36px;
+          flex-shrink: 0;
+          align-self: center;
+        }
+
+        .dw-close {
+          align-self: center;
+        }
       }
 
       /* ── GAME MODE ── */
