@@ -13707,7 +13707,11 @@
     // ── AUDIO: Google TTS (Chrome/Edge via fetch-blob) · Web Speech (Safari) ──
     // ── AUDIO: Google TTS via Netlify Function ──
     function playGoogleTTS(word, onDone) {
-      playSafariTTS(word, onDone);
+      const url = `/api/tts?q=${encodeURIComponent(word)}`;
+      sharedAudio.src = url;
+      sharedAudio.onended = onDone || null;
+      sharedAudio.onerror = () => playSafariTTS(word, onDone);
+      sharedAudio.play().catch(() => playSafariTTS(word, onDone));
     }
 
     // Keep your existing playSafariTTS function as fallback
