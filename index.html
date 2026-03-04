@@ -24,6 +24,7 @@
       --glass-blur: blur(16px);
     }
 
+    /* ── LIGHT MODE ── */
     * {
       box-sizing: border-box;
       margin: 0;
@@ -70,7 +71,6 @@
       font-family: 'Playfair Display', serif;
     }
 
-    /* ── HEADER ── */
     header {
       position: sticky;
       top: 0;
@@ -287,18 +287,63 @@
       position: absolute;
       inset: 0;
       border-radius: 20px;
-      background: var(--glass-bg);
-      border: 1px solid var(--glass-border);
+      /* lighter liquid glass — more tint, less blur than modals */
+      background:
+        linear-gradient(
+          135deg,
+          rgba(255,255,255,.10) 0%,
+          rgba(255,255,255,.03) 40%,
+          rgba(255,255,255,.0) 60%,
+          rgba(124,58,237,.05) 100%
+        ),
+        rgba(14, 18, 38, .55);
+      backdrop-filter: blur(16px) saturate(1.4);
+      -webkit-backdrop-filter: blur(16px) saturate(1.4);
+      border: 1px solid rgba(255,255,255,.0);
+      box-shadow:
+        0 10px 30px rgba(0,0,0,.3),
+        inset 0  1px 0  rgba(255,255,255,.18),
+        inset 1px 0  0  rgba(255,255,255,.08),
+        inset 0 -1px 0  rgba(0,0,0,.2),
+        0 0 0 1px rgba(124,58,237,.12);
       padding: 1.4rem;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, .3);
-      transition: border-color .3s, background .3s;
+      transition: box-shadow .3s, background .3s;
+      overflow: hidden;
+    }
+
+    /* Specular shimmer on card */
+    .card-face::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(
+        ellipse 70% 35% at 20% 8%,
+        rgba(255,255,255,.08) 0%,
+        transparent 70%
+      );
+      pointer-events: none;
     }
 
     .card-scene:hover .card-face {
-      background: rgba(255, 255, 255, .05);
-      border-color: rgba(124, 58, 237, .4);
+      background:
+        linear-gradient(
+          135deg,
+          rgba(255,255,255,.14) 0%,
+          rgba(255,255,255,.04) 40%,
+          rgba(255,255,255,.0) 60%,
+          rgba(124,58,237,.08) 100%
+        ),
+        rgba(14, 18, 38, .45);
+      box-shadow:
+        0 15px 35px rgba(124,58,237,.25),
+        0 0 20px rgba(245,158,158,.1),
+        inset 0  1px 0  rgba(255,255,255,.24),
+        inset 1px 0  0  rgba(255,255,255,.12),
+        inset 0 -1px 0  rgba(0,0,0,.2),
+        0 0 0 1px rgba(124,58,237,.35);
     }
 
     .card-top {
@@ -383,9 +428,71 @@
 
     .card-bottom {
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
+      align-items: center;
       margin-top: .5rem;
     }
+
+    .btn-bookmark {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      color: rgba(255,255,255,.2);
+      transition: color .2s, transform .2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-bookmark:hover { color: #a78bfa; transform: scale(1.2); }
+    .btn-bookmark.bookmarked { color: #a78bfa; }
+    .btn-bookmark.bookmarked svg { fill: #a78bfa; }
+    .btn-bookmark.pop { animation: bm-pop .3s cubic-bezier(.36,.07,.19,.97); }
+    @keyframes bm-pop {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.45); }
+      70%  { transform: scale(.9); }
+      100% { transform: scale(1); }
+    }
+
+    /* ── BOOKMARK SOURCE TOGGLE ── */
+    .bm-source-toggle {
+      display: flex;
+      gap: .35rem;
+      background: rgba(255,255,255,.04);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 3px;
+    }
+    .bm-source-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      border-radius: 7px;
+      padding: .35rem .9rem;
+      color: var(--text-muted);
+      font-family: 'Inter', sans-serif;
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .25s;
+      white-space: nowrap;
+    }
+    .bm-source-btn.active {
+      background: linear-gradient(135deg, rgba(124,58,237,.35), rgba(236,72,153,.25));
+      color: white;
+      box-shadow: 0 2px 8px rgba(124,58,237,.3);
+    }
+    .bm-source-hint {
+      font-size: .7rem;
+      color: var(--text-muted);
+      text-align: center;
+      min-height: 0;
+      transition: color .2s;
+    }
+    .bm-source-hint:empty { display: none; }
+    .bm-source-hint.warn { color: #f59e0b; }
+    .bm-source-hint.error { color: #ef4444; }
 
     .btn-audio {
       background: rgba(255, 255, 255, .1);
@@ -481,9 +588,9 @@
     .quiz-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(10, 15, 30, .88);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
+      background: rgba(6, 9, 20, .72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       z-index: 1000;
       display: flex;
       flex-direction: column;
@@ -581,10 +688,7 @@
       width: 100%;
       height: 100%;
       position: absolute;
-      border-radius: 24px;
-      background: var(--glass-bg);
-      border: 1px solid rgba(255, 255, 255, .15);
-      box-shadow: 0 20px 50px rgba(0, 0, 0, .5);
+      border-radius: 28px;
       display: flex;
       flex-direction: column;
       justify-content: center;
@@ -1244,38 +1348,110 @@
       }
     }
 
+    /* ══════════════════════════════════════════════════
+       LIQUID GLASS — applied to floating panels & cards
+    ══════════════════════════════════════════════════ */
+
+    /* Hidden SVG filter definition — referenced by CSS */
+
+    .liquid-glass {
+      /* 1. Real backdrop blur */
+      backdrop-filter: blur(28px) saturate(1.6) brightness(1.08);
+      -webkit-backdrop-filter: blur(28px) saturate(1.6) brightness(1.08);
+
+      /* 2. Glass body — very low opacity tint */
+      background:
+        /* specular top-left highlight */
+        linear-gradient(
+          135deg,
+          rgba(255,255,255,.18) 0%,
+          rgba(255,255,255,.04) 40%,
+          rgba(255,255,255,.0) 60%,
+          rgba(124,58,237,.06) 100%
+        ),
+        /* base glass tint */
+        rgba(14, 18, 38, .45);
+
+      /* 3. Layered border: bright top/left edge, subtle everywhere else */
+      border: 1px solid rgba(255,255,255,.0);
+      outline: 1px solid rgba(255,255,255,.0);
+
+      /* 4. Realistic glass shadow — soft outer, inner highlight */
+      box-shadow:
+        /* outer depth */
+        0 24px 64px rgba(0,0,0,.55),
+        0  8px 24px rgba(0,0,0,.35),
+        /* inner top-left light catch */
+        inset 0  1px 0   rgba(255,255,255,.28),
+        inset 1px 0  0   rgba(255,255,255,.12),
+        /* inner bottom-right shadow */
+        inset 0 -1px 0   rgba(0,0,0,.25),
+        inset -1px 0  0  rgba(0,0,0,.12),
+        /* subtle purple glow */
+        0 0 0 1px rgba(124,58,237,.18);
+
+      /* 5. SVG displacement for light-bending edge */
+      filter: url(#liquidGlass);
+
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Caustic shimmer layer — sits over content, pointer-events off */
+    .liquid-glass::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background:
+        radial-gradient(
+          ellipse 80% 40% at 25% 10%,
+          rgba(255,255,255,.10) 0%,
+          transparent 70%
+        ),
+        radial-gradient(
+          ellipse 40% 60% at 80% 85%,
+          rgba(124,58,237,.08) 0%,
+          transparent 60%
+        );
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Ensure direct children sit above the shimmer */
+    .liquid-glass > * { position: relative; z-index: 1; }
+
     /* ── QUIZ SETUP ── */
     .quiz-setup {
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1rem;
-      background: rgba(20, 25, 45, .95);
-      border: 1px solid var(--glass-border);
-      border-radius: 20px;
-      padding: 2rem 2.5rem;
+      gap: .6rem;
+      border-radius: 24px;
+      padding: 1.4rem 2rem;
       max-width: 420px;
       width: 90%;
     }
 
     .quiz-setup-title {
       font-family: 'Playfair Display', serif;
-      font-size: 1.6rem;
+      font-size: 1.4rem;
       font-weight: 700;
       background: linear-gradient(135deg, #fff, var(--accent-rose));
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
-      margin-bottom: .5rem;
+      margin-bottom: .1rem;
     }
 
     .quiz-setup-label {
-      font-size: .75rem;
+      font-size: .7rem;
       font-weight: 600;
       letter-spacing: .1em;
       text-transform: uppercase;
       color: var(--text-muted);
       align-self: flex-start;
+      margin-top: .2rem;
     }
 
     .quiz-setup-row {
@@ -1518,12 +1694,12 @@
     .setup-stats-row {
       width: 100%;
       border-top: 1px solid var(--glass-border);
-      padding-top: 1rem;
+      padding-top: .6rem;
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: .6rem;
-      font-size: .8rem;
+      gap: .45rem;
+      font-size: .75rem;
       text-align: center;
     }
 
@@ -1858,8 +2034,24 @@
     }
 
     .daily-word-inner {
-      background: linear-gradient(135deg, rgba(124, 58, 237, .12), rgba(236, 72, 153, .08));
-      border: 1px solid rgba(124, 58, 237, .3);
+      background:
+        linear-gradient(
+          135deg,
+          rgba(255,255,255,.13) 0%,
+          rgba(255,255,255,.03) 35%,
+          rgba(255,255,255,.0) 55%,
+          rgba(124,58,237,.07) 100%
+        ),
+        rgba(14, 18, 38, .42);
+      backdrop-filter: blur(24px) saturate(1.5) brightness(1.06);
+      -webkit-backdrop-filter: blur(24px) saturate(1.5) brightness(1.06);
+      border: 1px solid rgba(255,255,255,.0);
+      box-shadow:
+        0 8px 32px rgba(0,0,0,.35),
+        inset 0  1px 0  rgba(255,255,255,.22),
+        inset 1px 0  0  rgba(255,255,255,.10),
+        inset 0 -1px 0  rgba(0,0,0,.18),
+        0 0 0 1px rgba(124,58,237,.20);
       border-radius: 20px;
       padding: 1.2rem 1.6rem;
       display: flex;
@@ -1868,19 +2060,27 @@
       position: relative;
       overflow: hidden;
       cursor: pointer;
-      transition: border-color .3s, background .3s;
+      transition: box-shadow .3s, background .3s;
     }
 
     .daily-word-inner:hover {
-      border-color: rgba(124, 58, 237, .6);
-      background: linear-gradient(135deg, rgba(124, 58, 237, .18), rgba(236, 72, 153, .12));
+      box-shadow:
+        0 12px 40px rgba(0,0,0,.4),
+        inset 0  1px 0  rgba(255,255,255,.28),
+        inset 1px 0  0  rgba(255,255,255,.14),
+        inset 0 -1px 0  rgba(0,0,0,.2),
+        0 0 0 1px rgba(124,58,237,.45);
     }
 
     .daily-word-inner::before {
       content: '';
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at 0% 50%, rgba(124, 58, 237, .15), transparent 60%);
+      background: radial-gradient(
+        ellipse 60% 50% at 15% 20%,
+        rgba(255,255,255,.07) 0%,
+        transparent 65%
+      );
       pointer-events: none;
     }
 
@@ -2016,9 +2216,9 @@
     .game-overlay {
       position: fixed;
       inset: 0;
-      background: rgba(10, 15, 30, .95);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
+      background: rgba(6, 9, 20, .72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       z-index: 1100;
       display: flex;
       flex-direction: column;
@@ -2126,11 +2326,9 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 1.1rem;
-      background: rgba(20, 25, 45, .97);
-      border: 1px solid var(--glass-border);
+      gap: .6rem;
       border-radius: 24px;
-      padding: 2rem 2.5rem;
+      padding: 1.4rem 2rem;
       max-width: 420px;
       width: 90%;
       margin: 1rem auto;
@@ -2138,27 +2336,29 @@
 
     .game-setup-title {
       font-family: 'Playfair Display', serif;
-      font-size: 1.7rem;
+      font-size: 1.4rem;
       font-weight: 700;
       background: linear-gradient(135deg, #fff, var(--accent-rose));
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
+      margin-bottom: .1rem;
     }
 
     .game-setup-subtitle {
-      font-size: .85rem;
+      font-size: .8rem;
       color: var(--text-muted);
       text-align: center;
     }
 
     .game-setup-label {
-      font-size: .72rem;
+      font-size: .7rem;
       font-weight: 600;
       letter-spacing: .1em;
       text-transform: uppercase;
       color: var(--text-muted);
       align-self: flex-start;
+      margin-top: .2rem;
     }
 
     .game-setup-row {
@@ -3004,6 +3204,19 @@
   </style>
 
 <body>
+<!-- Liquid glass SVG filter — displacement map simulates light refraction at glass edges -->
+<svg style="position:absolute;width:0;height:0;overflow:hidden" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="liquidGlass" x="-5%" y="-5%" width="110%" height="110%" color-interpolation-filters="sRGB">
+      <!-- Fractal noise for organic edge distortion -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.65 0.75" numOctaves="3" seed="8" result="noise"/>
+      <!-- Displace only the edges, not the center content -->
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" result="displaced"/>
+      <!-- Composite back to preserve crisp interior -->
+      <feComposite in="displaced" in2="SourceGraphic" operator="atop"/>
+    </filter>
+  </defs>
+</svg>
   <div class="ambient-bg"></div>
   <div class="particles"></div>
   <header>
@@ -3025,6 +3238,7 @@
           <div class="filter-pill" data-filter="a">Adj</div>
           <div class="filter-pill" data-filter="adv">Adv</div>
           <div class="filter-pill" data-filter="other">Other</div>
+          <div class="filter-pill" data-filter="bookmarked">🔖 Saved</div>
         </div>
       </div>
       <!-- Mobile-only goto row -->
@@ -3069,6 +3283,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polygon points="5 3 19 12 5 21 5 3" />
           </svg> Quiz </button>
+        <!-- Theme toggle removed -->
       </div>
     </div>
   </header>
@@ -3108,8 +3323,14 @@
       <div class="quiz-score" id="quizScore" style="opacity:0.3">✓ 0 &nbsp; ✗ 0</div>
     </div>
     <!-- SETUP SCREEN -->
-    <div class="quiz-setup" id="quizSetup">
+    <div class="quiz-setup liquid-glass" id="quizSetup">
       <div class="quiz-setup-title">Quiz Setup</div>
+      <div class="quiz-setup-label">Word Source</div>
+      <div class="bm-source-toggle">
+        <button class="bm-source-btn active" id="quizSrcAll" onclick="setQuizSource('all')">All Words</button>
+        <button class="bm-source-btn" id="quizSrcBm" onclick="setQuizSource('bookmarked')">🔖 Saved Only</button>
+      </div>
+      <div class="bm-source-hint" id="quizBmHint"></div>
       <div class="quiz-setup-label">Direction</div>
       <div class="quiz-setup-row">
         <button class="qs-btn active" id="dirRuEn" onclick="setDir('ru-en')">RU → EN</button>
@@ -3125,7 +3346,8 @@
         <button class="qs-btn" data-pos="adv" onclick="setPosFilter(this)">Adv</button>
         <button class="qs-btn" data-pos="other" onclick="setPosFilter(this)">Other</button>
       </div>
-      <div class="quiz-setup-label">Word Range</div>
+      <div class="quiz-setup-label" id="quizWordRangeLabel">Word Range</div>
+      <div id="quizRangeWrap">
       <div class="qs-range-row">
         <div class="qs-range-field">
           <label class="qs-range-lbl">From</label>
@@ -3142,6 +3364,7 @@
         </div>
       </div>
       <div class="range-error" id="quizRangeError"></div>
+      </div>
       <div class="quiz-setup-label">Session Length</div>
       <div class="qs-session-row" id="sessionRow">
         <button class="qs-btn" data-len="10" onclick="setSessionLen(this)">10</button>
@@ -3164,7 +3387,7 @@
     </div>
     <!-- FLASHCARD PANEL -->
     <div class="quiz-card-wrap" id="quizCardWrap" style="display:none">
-      <div class="quiz-card" id="quizCard">
+      <div class="quiz-card liquid-glass" id="quizCard">
         <div class="q-rank" id="qRank">#1</div>
         <div class="q-pos" id="qPos">Noun</div>
         <div class="retry-badge" id="retryBadge" style="display:none"></div>
@@ -3215,7 +3438,7 @@
       </div>
     </div>
     <!-- SETUP SCREEN -->
-    <div class="game-setup" id="gameSetup">
+    <div class="game-setup liquid-glass" id="gameSetup">
       <div class="game-setup-title">🎮 Word Game</div>
       <div class="game-setup-label">Game Type</div>
       <div class="game-type-row" id="gameTypeRow">
@@ -3246,7 +3469,14 @@
         <button class="qs-btn" data-dir="en-ru">EN → RU</button>
         <button class="qs-btn" data-dir="mix">Mix</button>
       </div>
-      <div class="game-setup-label">Word Range</div>
+      <div class="game-setup-label">Word Source</div>
+      <div class="bm-source-toggle">
+        <button class="bm-source-btn active" id="gameSrcAll" onclick="setGameSource('all')">All Words</button>
+        <button class="bm-source-btn" id="gameSrcBm" onclick="setGameSource('bookmarked')">🔖 Saved Only</button>
+      </div>
+      <div class="bm-source-hint" id="gameBmHint"></div>
+      <div class="game-setup-label" id="gameWordRangeLabel">Word Range</div>
+      <div id="gameRangeWrap">
       <div class="qs-range-row">
         <div class="qs-range-field">
           <label class="qs-range-lbl">From</label>
@@ -3261,6 +3491,7 @@
         </div>
       </div>
       <div class="range-error" id="gameRangeError"></div>
+      </div>
       <div class="game-setup-label" id="gameLenLabel">Questions</div>
       <div class="game-setup-row" id="gameLenRow">
         <button class="qs-btn" data-len="10">10</button>
@@ -13476,48 +13707,7 @@
     // ── AUDIO: Google TTS (Chrome/Edge via fetch-blob) · Web Speech (Safari) ──
     // ── AUDIO: Google TTS via Netlify Function ──
     function playGoogleTTS(word, onDone) {
-      // Safari blocks async fetch-then-play; use Web Speech API with Russian voice
-      if (isSafari) {
-        playSafariTTS(word, onDone);
-        return;
-      }
-
-      // Use Netlify Function as proxy
-      const url = `/api/tts?q=${encodeURIComponent(word)}`;
-
-      console.log('Fetching TTS from:', url);
-
-      fetch(url)
-        .then(r => {
-          if (!r.ok) {
-            throw new Error(`HTTP error! status: ${r.status}`);
-          }
-          return r.blob();
-        })
-        .then(blob => {
-          if (blob.size === 0) {
-            throw new Error('Empty audio blob received');
-          }
-
-          const blobUrl = URL.createObjectURL(blob);
-          sharedAudio.pause();
-          sharedAudio.src = blobUrl;
-
-          sharedAudio.onended = sharedAudio.onerror = (e) => {
-            URL.revokeObjectURL(blobUrl);
-            if (onDone) onDone();
-          };
-
-          sharedAudio.play().catch((err) => {
-            console.warn('Audio playback failed, falling back to Web Speech', err);
-            URL.revokeObjectURL(blobUrl);
-            playSafariTTS(word, onDone);
-          });
-        })
-        .catch((err) => {
-          console.warn('TTS proxy failed, falling back to Web Speech', err);
-          playSafariTTS(word, onDone);
-        });
+      playSafariTTS(word, onDone);
     }
 
     // Keep your existing playSafariTTS function as fallback
@@ -13538,6 +13728,13 @@
       };
       speechSynthesis.speak(u);
     }
+    // ─── BOOKMARKS ────────────────────────────────────────────────────────────
+    const LS_BOOKMARKS = 'rv_bookmarks_v1';
+    let bookmarks = new Set();
+    function saveBookmarks() {
+      try { localStorage.setItem(LS_BOOKMARKS, JSON.stringify([...bookmarks])); }
+      catch(e) {}
+    }
     // ─── CARD FACTORY: build a reusable pooled node ───────────────────────────
     function buildPoolNode() {
       const sc = document.createElement('div');
@@ -13554,6 +13751,11 @@
 																			<div class="en-word"></div>
 																		</div>
 																		<div class="card-bottom">
+																			<button class="btn-bookmark" title="Bookmark">
+																				<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+																					<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+																				</svg>
+																			</button>
 																			<button class="btn-audio">
 																				<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
 																					<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
@@ -13563,12 +13765,23 @@
 																		</div>
 																	</div>
 																</div>`;
-      // Cache element references for reuse in stampCard
       sc._face = sc.querySelector('.card-face');
       sc._badge = sc.querySelector('.rank-badge');
       sc._posInd = sc.querySelector('.pos-indicator');
       sc._ruWord = sc.querySelector('.ru-word');
       sc._enWord = sc.querySelector('.en-word');
+      sc._bookmark = sc.querySelector('.btn-bookmark');
+      sc._bookmark.addEventListener('click', e => {
+        e.stopPropagation();
+        const rank = String(sc.dataset.rank);
+        if (bookmarks.has(rank)) { bookmarks.delete(rank); sc._bookmark.classList.remove('bookmarked'); }
+        else { bookmarks.add(rank); sc._bookmark.classList.add('bookmarked'); }
+        sc._bookmark.classList.remove('pop');
+        void sc._bookmark.offsetWidth;
+        sc._bookmark.classList.add('pop');
+        saveBookmarks();
+        if (cFilter === 'bookmarked') applyFilters();
+      });
       const ab = sc.querySelector('.btn-audio');
       ab.addEventListener('click', e => {
         e.stopPropagation();
@@ -13592,6 +13805,7 @@
       sc._ruWord.style.fontSize = ru.length > 16 ? '1.5rem' : ru.length > 12 ? '1.85rem' : '2.1rem';
       sc._enWord.textContent = en;
       sc.querySelector('.btn-audio').dataset.w = ru;
+      sc._bookmark.classList.toggle('bookmarked', bookmarks.has(String(rank)));
       return sc;
     }
     // ─── CARD POOL ────────────────────────────────────────────────────────────
@@ -13736,6 +13950,7 @@
         if (cFilter === 'a') return p === 'a' || p === 'apro' || p === 'anum';
         if (cFilter === 'adv') return p === 'adv' || p === 'advpro';
         if (cFilter === 'other') return !OTHER_POS.has(p);
+        if (cFilter === 'bookmarked') return bookmarks.has(String(w[0]));
         return true;
       }).map(({
         w
@@ -13831,6 +14046,8 @@
         if (raw) stats = new Map(JSON.parse(raw));
         activity = JSON.parse(localStorage.getItem(LS_ACTIVITY) || '{}');
         srsData = JSON.parse(localStorage.getItem(LS_SRS) || '{}');
+        const _bRaw = localStorage.getItem(LS_BOOKMARKS);
+        if (_bRaw) bookmarks = new Set(JSON.parse(_bRaw));
         firstOpenDate = localStorage.getItem(LS_FIRST_OPEN) || todayStr();
         if (!localStorage.getItem(LS_FIRST_OPEN)) {
           localStorage.setItem(LS_FIRST_OPEN, firstOpenDate);
@@ -14046,6 +14263,85 @@
     updateStreakUI();
     // ── SESSION LENGTH ─────────────────────────────────────────────────────────────
     let sessionLen = 0; // 0 = all
+    let quizSource = 'all';  // 'all' | 'bookmarked'
+    let gameSource = 'all';  // 'all' | 'bookmarked'
+
+    function getBookmarkedPool() {
+      return words.filter(w => bookmarks.has(String(w[0])));
+    }
+
+    function setQuizSource(src) {
+      quizSource = src;
+      document.getElementById('quizSrcAll').classList.toggle('active', src === 'all');
+      document.getElementById('quizSrcBm').classList.toggle('active', src === 'bookmarked');
+      const rangeWrap = document.getElementById('quizRangeWrap');
+      const rangeLabel = document.getElementById('quizWordRangeLabel');
+      rangeWrap.style.display = src === 'bookmarked' ? 'none' : '';
+      rangeLabel.style.display = src === 'bookmarked' ? 'none' : '';
+      updateQuizBmHint();
+    }
+
+    function setGameSource(src) {
+      gameSource = src;
+      document.getElementById('gameSrcAll').classList.toggle('active', src === 'all');
+      document.getElementById('gameSrcBm').classList.toggle('active', src === 'bookmarked');
+      const rangeWrap = document.getElementById('gameRangeWrap');
+      const rangeLabel = document.getElementById('gameWordRangeLabel');
+      rangeWrap.style.display = src === 'bookmarked' ? 'none' : '';
+      rangeLabel.style.display = src === 'bookmarked' ? 'none' : '';
+      updateGameBmHint();
+      // Enable/disable start button based on count
+      const btn = document.getElementById('gmStartBtn');
+      if (src === 'bookmarked') {
+        const count = bookmarks.size;
+        const min = gameRangeMin();
+        btn.disabled = count < min;
+      } else {
+        btn.disabled = false;
+      }
+    }
+
+    function updateQuizBmHint() {
+      const el = document.getElementById('quizBmHint');
+      if (!el) return;
+      if (quizSource !== 'bookmarked') { el.textContent = ''; el.className = 'bm-source-hint'; return; }
+      const count = bookmarks.size;
+      if (count === 0) {
+        el.textContent = 'No bookmarks yet — save some words first!';
+        el.className = 'bm-source-hint error';
+      } else if (count < 10) {
+        el.textContent = `Only ${count} saved word${count > 1 ? 's' : ''} — need at least 10 for a quiz.`;
+        el.className = 'bm-source-hint warn';
+      } else {
+        el.textContent = `${count} saved word${count > 1 ? 's' : ''} ready ✓`;
+        el.className = 'bm-source-hint';
+        el.style.color = '#22c55e';
+        return;
+      }
+      el.style.color = '';
+    }
+
+    function updateGameBmHint() {
+      const el = document.getElementById('gameBmHint');
+      if (!el) return;
+      if (gameSource !== 'bookmarked') { el.textContent = ''; el.className = 'bm-source-hint'; return; }
+      const count = bookmarks.size;
+      const min = gameRangeMin();
+      const gameLabel = gameType === 'match' ? 'Match (needs 24+)' : 'this game (needs 10+)';
+      if (count === 0) {
+        el.textContent = 'No bookmarks yet — save some words first!';
+        el.className = 'bm-source-hint error';
+      } else if (count < min) {
+        el.textContent = `Only ${count} saved word${count > 1 ? 's' : ''} — ${gameLabel} needs ${min}.`;
+        el.className = 'bm-source-hint warn';
+      } else {
+        el.textContent = `${count} saved word${count > 1 ? 's' : ''} ready ✓`;
+        el.className = 'bm-source-hint';
+        el.style.color = '#22c55e';
+        return;
+      }
+      el.style.color = '';
+    }
     let activeSessionBtn = null;
     function setSessionLen(btn) {
       if (activeSessionBtn && activeSessionBtn !== btn) activeSessionBtn.classList.remove('active');
@@ -14218,23 +14514,31 @@
 
     function startQuiz(pool) {
       if (!pool) {
-        const rStart = parseInt(document.getElementById('rangeStart').value) || 1;
-        const rEnd = parseInt(document.getElementById('rangeEnd').value) || 8000;
-        pool = wordsMeta.filter(({
-          w
-        }) => {
-          if (w[0] < rStart || w[0] > rEnd) return false;
-          if (quizPosFilter === 'all') return true;
-          const p = w[3];
-          if (quizPosFilter === 's') return p === 's';
-          if (quizPosFilter === 'v') return p === 'v';
-          if (quizPosFilter === 'a') return p === 'a' || p === 'apro' || p === 'anum';
-          if (quizPosFilter === 'adv') return p === 'adv' || p === 'advpro';
-          if (quizPosFilter === 'other') return !OTHER_POS.has(p);
-          return true;
-        }).map(({
-          w
-        }) => w);
+        if (quizSource === 'bookmarked') {
+          pool = getBookmarkedPool();
+          if (pool.length < 10) {
+            updateQuizBmHint();
+            return;
+          }
+        } else {
+          const rStart = parseInt(document.getElementById('rangeStart').value) || 1;
+          const rEnd = parseInt(document.getElementById('rangeEnd').value) || 8000;
+          pool = wordsMeta.filter(({
+            w
+          }) => {
+            if (w[0] < rStart || w[0] > rEnd) return false;
+            if (quizPosFilter === 'all') return true;
+            const p = w[3];
+            if (quizPosFilter === 's') return p === 's';
+            if (quizPosFilter === 'v') return p === 'v';
+            if (quizPosFilter === 'a') return p === 'a' || p === 'apro' || p === 'anum';
+            if (quizPosFilter === 'adv') return p === 'adv' || p === 'advpro';
+            if (quizPosFilter === 'other') return !OTHER_POS.has(p);
+            return true;
+          }).map(({
+            w
+          }) => w);
+        }
       }
       if (!pool.length) {
         alert('No words match that filter/range combo.');
@@ -14588,7 +14892,10 @@
     function startGame() {
       const gRangeStart = parseInt(document.getElementById('gameRangeStart').value) || 1;
       const gRangeEnd = parseInt(document.getElementById('gameRangeEnd').value) || 500;
-      const pool = words.filter(w => w[0] >= gRangeStart && w[0] <= gRangeEnd);
+      const pool = gameSource === 'bookmarked'
+        ? getBookmarkedPool()
+        : words.filter(w => w[0] >= gRangeStart && w[0] <= gRangeEnd);
+      if (pool.length < 10) { updateGameBmHint(); return; }
       gameDistractorPool = pool; // cache for showGameQuestion — avoids re-filtering per question
       gameDeck = shuffle(weightedPool(pool));
       gameTotalQ = gameLen === 99 ? gameDeck.length : Math.min(gameLen, gameDeck.length);
@@ -14723,8 +15030,11 @@
     function startMatchGame() {
       const gRangeStart2 = parseInt(document.getElementById('gameRangeStart').value) || 1;
       const gRangeEnd2 = parseInt(document.getElementById('gameRangeEnd').value) || 500;
-      const pool = shuffle(weightedPool(words.filter(w => w[0] >= gRangeStart2 && w[0] <= gRangeEnd2)));
-      matchDeck = pool;
+      const pool = gameSource === 'bookmarked'
+        ? getBookmarkedPool()
+        : words.filter(w => w[0] >= gRangeStart2 && w[0] <= gRangeEnd2);
+      if (pool.length < 24) { updateGameBmHint(); return; }
+      matchDeck = shuffle(weightedPool(pool));
       matchTotalRounds = gameLen === 99 ? Math.floor(matchDeck.length / MATCH_PAIRS) : Math.min(gameLen, Math.floor(matchDeck.length / MATCH_PAIRS));
       matchRound = 0;
       matchScore = 0;
@@ -14980,6 +15290,11 @@
       gameType = card.dataset.type;
       updateSetupHintForType();
       validateRangeSize('gameRangeStart', 'gameRangeEnd', 'gameRangeError');
+      updateGameBmHint();
+      // Re-check start button disabled state
+      if (gameSource === 'bookmarked') {
+        document.getElementById('gmStartBtn').disabled = bookmarks.size < gameRangeMin();
+      }
     });
     document.getElementById('gameDirRow').addEventListener('click', e => {
       const b = e.target.closest('.qs-btn');
@@ -15081,8 +15396,10 @@
       const speedPx = { 10: 0.9, 20: 1.5, 40: 2.2, 99: 3.2 }[gameLen] ?? 1.5;
       const gS = parseInt(document.getElementById('gameRangeStart').value) || 1;
       const gE = parseInt(document.getElementById('gameRangeEnd').value) || 500;
-      const pool = shuffle(words.filter(w => w[0] >= gS && w[0] <= gE));
-      if (pool.length < 3) return;
+      const pool = shuffle(gameSource === 'bookmarked'
+        ? getBookmarkedPool()
+        : words.filter(w => w[0] >= gS && w[0] <= gE));
+      if (pool.length < 10) { updateGameBmHint(); return; }
 
       document.getElementById('fallingWrap').style.display = 'flex';
       document.getElementById('gameSetup').style.display = 'none';
@@ -15397,8 +15714,10 @@
       }[gameLen] ?? 220;
       const gS = parseInt(document.getElementById('gameRangeStart').value) || 1;
       const gE = parseInt(document.getElementById('gameRangeEnd').value) || 500;
-      const pool = shuffle(words.filter(w => w[0] >= gS && w[0] <= gE));
-      if (pool.length < 3) return;
+      const pool = shuffle(gameSource === 'bookmarked'
+        ? getBookmarkedPool()
+        : words.filter(w => w[0] >= gS && w[0] <= gE));
+      if (pool.length < 10) { updateGameBmHint(); return; }
       // Size canvas to fit overlay
       const wrap = document.getElementById('snakeWrap');
       wrap.style.display = 'flex';
