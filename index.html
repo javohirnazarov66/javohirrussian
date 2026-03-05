@@ -204,11 +204,11 @@
       box-shadow: 0 6px 20px rgba(124, 58, 237, .6);
     }
 
-    .filters {
-      display: flex;
-      gap: .6rem;
-      flex-wrap: wrap;
-    }
+    .filters { display: flex; gap: .6rem; flex-wrap: wrap; }
+    .filter-break { display: none; }
+    .due-pill-count { display:inline-block;background:rgba(249,115,22,.25);color:#fb923c;border-radius:99px;font-size:.72rem;font-weight:700;padding:0 .4rem;min-width:1.2rem;text-align:center;line-height:1.4; }
+    .due-pill-count:empty { display:none; }
+    [data-filter="due"].active { border-color:#f97316;background:linear-gradient(135deg,rgba(249,115,22,.2),rgba(239,68,68,.15));box-shadow:0 0 10px rgba(249,115,22,.3); }
 
     .filter-pill {
       background: var(--glass-bg);
@@ -880,19 +880,9 @@
         width: 100%;
       }
 
-      /* Filters — single scrollable row, no wrapping */
-      .filters {
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        padding-bottom: 2px;
-        gap: .35rem;
-      }
-
-      .filters::-webkit-scrollbar {
-        display: none;
-      }
+      .filters { flex-wrap: wrap; overflow-x: visible; padding-bottom: 2px; gap: .35rem; }
+      .filter-break { flex-basis: 100%; height: 0; }
+      .filters::-webkit-scrollbar { display: none; }
 
       .filter-pill {
         flex-shrink: 0;
@@ -1740,8 +1730,9 @@
     /* ── STREAK BANNER ── */
     .streak-banner {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: .5rem;
+      gap: .25rem;
       background: rgba(251, 191, 36, .07);
       border: 1px solid rgba(251, 191, 36, .25);
       border-radius: 12px;
@@ -1755,15 +1746,19 @@
       flex-shrink: 0;
       user-select: none;
     }
-
-    .streak-banner:hover {
-      background: rgba(251, 191, 36, .15);
-    }
-
-    .streak-banner .streak-num {
-      font-size: 1.05rem;
-      font-weight: 800;
-    }
+    .streak-banner:hover { background: rgba(251, 191, 36, .15); }
+    .streak-banner .streak-num { font-size: 1.05rem; font-weight: 800; }
+    .streak-banner-top { display: flex; align-items: center; gap: .4rem; }
+    .streak-goal-bar-wrap { width: 100%; height: 4px; background: rgba(251,191,36,.2); border-radius: 99px; overflow: hidden; display: none; }
+    .streak-goal-bar-wrap.visible { display: block; }
+    .streak-goal-bar { height: 100%; background: #fbbf24; border-radius: 99px; transition: width .4s ease, background .3s; width: 0%; }
+    .streak-goal-bar.complete { background: #22c55e; }
+    .streak-banner.goal-complete { border-color: rgba(34,197,94,.5); background: rgba(34,197,94,.08); color: #22c55e; }
+    .goal-selector { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .5rem; }
+    .goal-btn { background: var(--glass-bg); border: 1px solid var(--glass-border); color: var(--text-muted); padding: .4rem .9rem; border-radius: 99px; font-size: .82rem; font-weight: 600; cursor: pointer; transition: all .25s; font-family: inherit; }
+    .goal-btn:hover { background: rgba(255,255,255,.1); color: white; }
+    .goal-btn.active { background: linear-gradient(135deg, rgba(124,58,237,.3), rgba(236,72,153,.2)); border-color: var(--accent-purple); color: white; }
+    .goal-today-text { font-size: .78rem; color: var(--text-muted); margin-top: .35rem; }
 
     /* ── PROGRESS PANEL ── */
     .progress-panel {
@@ -3201,6 +3196,71 @@
         height: 300px;
       }
     }
+
+    /* ── ONBOARDING ── */
+    .ob-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 9000;
+      pointer-events: none;
+      transition: opacity .3s;
+    }
+    .ob-backdrop.active { pointer-events: all; }
+    .ob-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .ob-tooltip {
+      position: fixed;
+      z-index: 9001;
+      background: #1a1f35;
+      border: 1px solid rgba(124,58,237,.5);
+      border-radius: 16px;
+      padding: 1.1rem 1.3rem;
+      max-width: 300px;
+      width: calc(100vw - 2rem);
+      box-shadow: 0 8px 40px rgba(0,0,0,.6), 0 0 0 1px rgba(124,58,237,.2);
+      transition: top .35s cubic-bezier(.4,0,.2,1), left .35s cubic-bezier(.4,0,.2,1), opacity .25s;
+    }
+    .ob-tooltip-emoji { font-size: 1.6rem; margin-bottom: .4rem; }
+    .ob-tooltip-title { font-size: 1rem; font-weight: 700; color: white; margin-bottom: .3rem; }
+    .ob-tooltip-body { font-size: .85rem; color: #a78bfa; line-height: 1.5; margin-bottom: .9rem; }
+    .ob-tooltip-footer { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+    .ob-dots { display: flex; gap: .35rem; }
+    .ob-dot { width: 6px; height: 6px; border-radius: 50%; background: rgba(255,255,255,.2); transition: background .2s; }
+    .ob-dot.active { background: var(--accent-purple); }
+    .ob-btns { display: flex; gap: .5rem; }
+    .ob-btn-skip {
+      background: none;
+      border: 1px solid rgba(255,255,255,.15);
+      color: var(--text-muted);
+      padding: .4rem .8rem;
+      border-radius: 99px;
+      font-size: .8rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .2s;
+    }
+    .ob-btn-skip:hover { border-color: rgba(255,255,255,.3); color: white; }
+    .ob-btn-next {
+      background: linear-gradient(135deg, var(--accent-purple), var(--rank-end));
+      border: none;
+      color: white;
+      padding: .4rem 1rem;
+      border-radius: 99px;
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all .2s;
+    }
+    .ob-btn-next:hover { opacity: .9; transform: translateY(-1px); }
+    .ob-highlight-ring {
+      position: fixed;
+      border: 2px solid rgba(124,58,237,.8);
+      border-radius: 12px;
+      box-shadow: 0 0 0 4px rgba(124,58,237,.15), 0 0 20px rgba(124,58,237,.3);
+      pointer-events: none;
+      z-index: 8999;
+      transition: all .35s cubic-bezier(.4,0,.2,1);
+    }
   </style>
 
 <body>
@@ -3238,7 +3298,9 @@
           <div class="filter-pill" data-filter="a">Adj</div>
           <div class="filter-pill" data-filter="adv">Adv</div>
           <div class="filter-pill" data-filter="other">Other</div>
+          <div class="filter-break"></div>
           <div class="filter-pill" data-filter="bookmarked">🔖 Saved</div>
+          <div class="filter-pill" id="duePill" data-filter="due">📅 Due <span class="due-pill-count" id="duePillCount"></span></div>
         </div>
       </div>
       <!-- Mobile-only goto row -->
@@ -3267,9 +3329,14 @@
           <button class="goto-btn" onclick="jumpToWord(document.getElementById('gotoInput').value)">↵</button>
         </div>
         <div class="streak-banner" id="streakBanner" onclick="openProgress()">
-          <span>🔥</span>
-          <span class="streak-num" id="streakNum">0</span>
-          <span class="streak-cold" id="streakLabel">day streak</span>
+          <div class="streak-banner-top">
+            <span>🔥</span>
+            <span class="streak-num" id="streakNum">0</span>
+            <span class="streak-cold" id="streakLabel">day streak</span>
+          </div>
+          <div class="streak-goal-bar-wrap" id="goalBarWrap">
+            <div class="streak-goal-bar" id="goalBar"></div>
+          </div>
         </div>
         <button class="btn-game" id="startGameBtn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -3287,6 +3354,23 @@
       </div>
     </div>
   </header>
+  <!-- ONBOARDING -->
+  <div class="ob-backdrop" id="obBackdrop">
+    <svg class="ob-svg" id="obSvg"></svg>
+  </div>
+  <div class="ob-highlight-ring" id="obRing" style="display:none"></div>
+  <div class="ob-tooltip" id="obTooltip" style="display:none">
+    <div class="ob-tooltip-emoji" id="obEmoji"></div>
+    <div class="ob-tooltip-title" id="obTitle"></div>
+    <div class="ob-tooltip-body" id="obBody"></div>
+    <div class="ob-tooltip-footer">
+      <div class="ob-dots" id="obDots"></div>
+      <div class="ob-btns">
+        <button class="ob-btn-skip" id="obSkip">Skip</button>
+        <button class="ob-btn-next" id="obNext">Next →</button>
+      </div>
+    </div>
+  </div>
   <!-- DAILY WORD BANNER -->
   <div class="daily-word-banner" id="dailyWordBanner">
     <div class="daily-word-inner" id="dailyWordInner">
@@ -3419,7 +3503,10 @@
       <div class="qr-emoji" id="resultEmoji">🎉</div>
       <div class="qr-title" id="resultTitle">Great job!</div>
       <div class="qr-stat" id="resultStat"></div>
-      <button class="qs-start" onclick="showSetup()">Try Again</button>
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center;">
+        <button class="qs-start" onclick="showSetup()">Try Again</button>
+        <button class="qs-start" id="btnReviewMissed" style="display:none;background:linear-gradient(135deg,#f97316,#ef4444);">↩ Review Missed</button>
+      </div>
     </div>
   </div>
   <!-- GAME OVERLAY -->
@@ -3641,6 +3728,17 @@
         <div class="bar-chart" id="barChart"></div>
       </div>
       <div class="progress-streak-row" id="progressStreakRow"></div>
+      <div class="chart-area">
+        <div class="chart-title">🎯 Daily Goal</div>
+        <div class="goal-selector" id="goalSelector">
+          <button class="goal-btn" data-goal="10" onclick="setDailyGoal(10)">10 cards</button>
+          <button class="goal-btn" data-goal="20" onclick="setDailyGoal(20)">20 cards</button>
+          <button class="goal-btn" data-goal="50" onclick="setDailyGoal(50)">50 cards</button>
+          <button class="goal-btn" data-goal="100" onclick="setDailyGoal(100)">100 cards</button>
+          <button class="goal-btn" data-goal="0" onclick="setDailyGoal(0)">No goal</button>
+        </div>
+        <div class="goal-today-text" id="goalTodayText"></div>
+      </div>
     </div>
   </div>
   <!-- EXIT CONFIRM DIALOG -->
@@ -13702,19 +13800,49 @@
     }));
     // Reusable single Audio instance
     const sharedAudio = new Audio();
-    // ── DETECT SAFARI ────────────────────────────────────────────────────────
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    // ── AUDIO: Google TTS (Chrome/Edge via fetch-blob) · Web Speech (Safari) ──
-    // ── AUDIO: Google TTS via Netlify Function ──
-    function playGoogleTTS(word, onDone) {
-      const url = `/api/tts?q=${encodeURIComponent(word)}`;
-      sharedAudio.src = url;
-      sharedAudio.onended = onDone || null;
-      sharedAudio.onerror = () => playSafariTTS(word, onDone);
-      sharedAudio.play().catch(() => playSafariTTS(word, onDone));
+    // ── AUDIO CACHE (IndexedDB) ───────────────────────────────────────────────
+    const AUDIO_DB_NAME = 'rv_audio_cache';
+    const AUDIO_DB_STORE = 'blobs';
+    let audioDB = null;
+    function openAudioDB() {
+      if (audioDB) return Promise.resolve(audioDB);
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(AUDIO_DB_NAME, 1);
+        req.onupgradeneeded = e => e.target.result.createObjectStore(AUDIO_DB_STORE);
+        req.onsuccess = e => { audioDB = e.target.result; resolve(audioDB); };
+        req.onerror = () => reject(req.error);
+      });
     }
-
-    // Keep your existing playSafariTTS function as fallback
+    function getCachedAudio(word) {
+      return openAudioDB().then(db => new Promise(resolve => {
+        const tx = db.transaction(AUDIO_DB_STORE, 'readonly');
+        const req = tx.objectStore(AUDIO_DB_STORE).get(word);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      })).catch(() => null);
+    }
+    function setCachedAudio(word, blob) {
+      openAudioDB().then(db => {
+        const tx = db.transaction(AUDIO_DB_STORE, 'readwrite');
+        tx.objectStore(AUDIO_DB_STORE).put(blob, word);
+      }).catch(() => {});
+    }
+    function playBlob(blob, onDone) {
+      const url = URL.createObjectURL(blob);
+      sharedAudio.src = url;
+      sharedAudio.onended = () => { URL.revokeObjectURL(url); if (onDone) onDone(); };
+      sharedAudio.onerror = () => { URL.revokeObjectURL(url); if (onDone) onDone(); };
+      sharedAudio.play().catch(() => { URL.revokeObjectURL(url); if (onDone) onDone(); });
+    }
+    function playGoogleTTS(word, onDone) {
+      getCachedAudio(word).then(cached => {
+        if (cached) { playBlob(cached, onDone); return; }
+        fetch(`/api/tts?q=${encodeURIComponent(word)}`)
+          .then(r => r.ok ? r.blob() : Promise.reject(r.status))
+          .then(blob => { setCachedAudio(word, blob); playBlob(blob, onDone); })
+          .catch(() => playSafariTTS(word, onDone));
+      });
+    }
     function playSafariTTS(word, onDone) {
       if (!('speechSynthesis' in window)) {
         if (onDone) onDone();
@@ -13792,6 +13920,10 @@
         sharedAudio.pause();
         sc._face.classList.add('playing');
         const word = ab.dataset.w;
+        const _d = todayStr();
+        activity[_d] = (_d in activity ? activity[_d] : 0) + 1;
+        saveStats();
+        updateStreakUI();
         playGoogleTTS(word, () => sc._face.classList.remove('playing'));
       });
       return sc;
@@ -13955,6 +14087,7 @@
         if (cFilter === 'adv') return p === 'adv' || p === 'advpro';
         if (cFilter === 'other') return !OTHER_POS.has(p);
         if (cFilter === 'bookmarked') return bookmarks.has(String(w[0]));
+        if (cFilter === 'due') { const s = srsData[w[0]]; return !!s && s.due <= todayStr(); }
         return true;
       }).map(({
         w
@@ -14091,6 +14224,7 @@
       srsData[rank] = srs;
       updateStreakUI();
       saveStats();
+      updateDuePill();
     }
 
     function clearStats() {
@@ -14122,6 +14256,13 @@
       });
     }
 
+    function updateDuePill() {
+      const count = getDueWords().length;
+      const countEl = document.getElementById('duePillCount');
+      const pill = document.getElementById('duePill');
+      if (countEl) countEl.textContent = count > 0 ? count : '';
+      if (pill) pill.style.opacity = count > 0 ? '1' : '0.45';
+    }
     function getSrsBadgeInfo(rank) {
       const srs = srsData[rank];
       if (!srs) return {
@@ -14156,15 +14297,52 @@
       return streak;
     }
 
+    // ── DAILY GOAL ──────────────────────────────────────────────────────────────
+    const LS_DAILY_GOAL = 'rv_daily_goal_v1';
+    let dailyGoal = parseInt(localStorage.getItem(LS_DAILY_GOAL) || '0');
+    function setDailyGoal(n) {
+      dailyGoal = n;
+      localStorage.setItem(LS_DAILY_GOAL, n);
+      updateStreakUI();
+      renderGoalSelector();
+    }
+    function getTodayCount() { return activity[todayStr()] || 0; }
+    function renderGoalSelector() {
+      document.querySelectorAll('.goal-btn').forEach(btn => {
+        btn.classList.toggle('active', parseInt(btn.dataset.goal) === dailyGoal);
+      });
+      const todayCount = getTodayCount();
+      const textEl = document.getElementById('goalTodayText');
+      if (textEl) {
+        if (dailyGoal > 0) {
+          const pct = Math.min(100, Math.round((todayCount / dailyGoal) * 100));
+          textEl.textContent = `Today: ${todayCount} / ${dailyGoal} cards reviewed (${pct}%)`;
+        } else {
+          textEl.textContent = todayCount > 0 ? `Today: ${todayCount} cards reviewed` : '';
+        }
+      }
+    }
     function updateStreakUI() {
       const s = calcStreak();
       const numEl = document.getElementById('streakNum');
       const lblEl = document.getElementById('streakLabel');
-      if (numEl) numEl.textContent = s;
-      if (lblEl) lblEl.textContent = s === 1 ? 'day streak' : 'day streak';
-      // Dim banner if no streak
       const banner = document.getElementById('streakBanner');
-      if (banner) banner.style.opacity = s > 0 ? '1' : '0.45';
+      const goalBarWrap = document.getElementById('goalBarWrap');
+      const goalBar = document.getElementById('goalBar');
+      const todayCount = getTodayCount();
+      if (numEl) numEl.textContent = s;
+      if (dailyGoal > 0) {
+        const pct = Math.min(100, Math.round((todayCount / dailyGoal) * 100));
+        const complete = todayCount >= dailyGoal;
+        if (lblEl) lblEl.textContent = complete ? '✓ goal reached!' : `${todayCount} / ${dailyGoal} today`;
+        if (goalBarWrap) goalBarWrap.classList.add('visible');
+        if (goalBar) { goalBar.style.width = pct + '%'; goalBar.classList.toggle('complete', complete); }
+        if (banner) { banner.classList.toggle('goal-complete', complete); banner.style.opacity = '1'; }
+      } else {
+        if (lblEl) lblEl.textContent = 'day streak';
+        if (goalBarWrap) goalBarWrap.classList.remove('visible');
+        if (banner) { banner.classList.remove('goal-complete'); banner.style.opacity = s > 0 ? '1' : '0.45'; }
+      }
     }
     // ── PROGRESS PANEL ─────────────────────────────────────────────────────────────
     function openProgress() {
@@ -14177,6 +14355,7 @@
     }
 
     function renderProgressPanel() {
+      renderGoalSelector();
       const streak = calcStreak();
       const totalSeen = stats.size;
       let totalCorrect = 0;
@@ -14264,6 +14443,7 @@
       document.getElementById('btnClearStats').style.display = totalSeen ? 'inline-flex' : 'none';
     }
     loadStats();
+    updateDuePill();
     updateStreakUI();
     // ── SESSION LENGTH ─────────────────────────────────────────────────────────────
     let sessionLen = 0; // 0 = all
@@ -14278,10 +14458,11 @@
       quizSource = src;
       document.getElementById('quizSrcAll').classList.toggle('active', src === 'all');
       document.getElementById('quizSrcBm').classList.toggle('active', src === 'bookmarked');
+      document.getElementById('quizSrcDue').classList.toggle('active', src === 'due');
       const rangeWrap = document.getElementById('quizRangeWrap');
       const rangeLabel = document.getElementById('quizWordRangeLabel');
-      rangeWrap.style.display = src === 'bookmarked' ? 'none' : '';
-      rangeLabel.style.display = src === 'bookmarked' ? 'none' : '';
+      rangeWrap.style.display = (src === 'bookmarked' || src === 'due') ? 'none' : '';
+      rangeLabel.style.display = (src === 'bookmarked' || src === 'due') ? 'none' : '';
       updateQuizBmHint();
     }
 
@@ -14289,10 +14470,11 @@
       gameSource = src;
       document.getElementById('gameSrcAll').classList.toggle('active', src === 'all');
       document.getElementById('gameSrcBm').classList.toggle('active', src === 'bookmarked');
+      document.getElementById('gameSrcDue').classList.toggle('active', src === 'due');
       const rangeWrap = document.getElementById('gameRangeWrap');
       const rangeLabel = document.getElementById('gameWordRangeLabel');
-      rangeWrap.style.display = src === 'bookmarked' ? 'none' : '';
-      rangeLabel.style.display = src === 'bookmarked' ? 'none' : '';
+      rangeWrap.style.display = (src === 'bookmarked' || src === 'due') ? 'none' : '';
+      rangeLabel.style.display = (src === 'bookmarked' || src === 'due') ? 'none' : '';
       updateGameBmHint();
       // Enable/disable start button based on count
       const btn = document.getElementById('gmStartBtn');
@@ -14308,6 +14490,13 @@
     function updateQuizBmHint() {
       const el = document.getElementById('quizBmHint');
       if (!el) return;
+      if (quizSource === 'due') {
+        const count = getDueWords().length;
+        if (count === 0) { el.textContent = 'No words due today!'; el.className = 'bm-source-hint error'; el.style.color = ''; }
+        else if (count < 10) { el.textContent = `Only ${count} due — need at least 10.`; el.className = 'bm-source-hint warn'; el.style.color = ''; }
+        else { el.textContent = `${count} words due ✓`; el.className = 'bm-source-hint'; el.style.color = '#22c55e'; }
+        return;
+      }
       if (quizSource !== 'bookmarked') { el.textContent = ''; el.className = 'bm-source-hint'; return; }
       const count = bookmarks.size;
       if (count === 0) {
@@ -14328,6 +14517,13 @@
     function updateGameBmHint() {
       const el = document.getElementById('gameBmHint');
       if (!el) return;
+      if (gameSource === 'due') {
+        const count = getDueWords().length; const min = gameRangeMin();
+        if (count === 0) { el.textContent = 'No words due today!'; el.className = 'bm-source-hint error'; el.style.color = ''; }
+        else if (count < min) { el.textContent = `Only ${count} due — need ${min}.`; el.className = 'bm-source-hint warn'; el.style.color = ''; }
+        else { el.textContent = `${count} words due ✓`; el.className = 'bm-source-hint'; el.style.color = '#22c55e'; }
+        return;
+      }
       if (gameSource !== 'bookmarked') { el.textContent = ''; el.className = 'bm-source-hint'; return; }
       const count = bookmarks.size;
       const min = gameRangeMin();
@@ -14382,7 +14578,7 @@
 
     function jumpToWord(val) {
       const n = parseInt(val);
-      if (!n || n < 1 || n > 8000) return;
+      if (!n || n < 1 || n > 10000) return;
       // Clear any active filter/search so the word is visible
       const allPill = document.querySelector('.filter-pill[data-filter="all"]');
       if (allPill && !allPill.classList.contains('active')) allPill.click();
@@ -14520,10 +14716,10 @@
       if (!pool) {
         if (quizSource === 'bookmarked') {
           pool = getBookmarkedPool();
-          if (pool.length < 10) {
-            updateQuizBmHint();
-            return;
-          }
+          if (pool.length < 10) { updateQuizBmHint(); return; }
+        } else if (quizSource === 'due') {
+          pool = getDueWords();
+          if (pool.length < 10) { updateQuizBmHint(); return; }
         } else {
           const rStart = parseInt(document.getElementById('rangeStart').value) || 1;
           const rEnd = parseInt(document.getElementById('rangeEnd').value) || 8000;
@@ -14703,6 +14899,11 @@
       const weak = getWeakWords().length;
       document.getElementById('resultEmoji').textContent = emoji;
       document.getElementById('resultTitle').textContent = title;
+      const reviewMissedBtn = document.getElementById('btnReviewMissed');
+      if (reviewMissedBtn) {
+        if (quizWrong > 0) { reviewMissedBtn.style.display = ''; reviewMissedBtn.textContent = `↩ Review ${quizWrong} Missed`; reviewMissedBtn.onclick = () => startReview(); }
+        else { reviewMissedBtn.style.display = 'none'; }
+      }
       document.getElementById('resultStat').innerHTML = `
 																												<strong>${pct}%</strong>${quizCorrect} correct · ${quizWrong} missed · ${quizDeck.length} cards` + (weak ? `
 																												<br>
@@ -14784,7 +14985,7 @@
         }
         // Calculate position in the virtual scroller
         const cols = Math.max(1, Math.floor((document.getElementById('cardGrid').clientWidth - 64 + 28) / (280 + 28)));
-        const cardH = window.innerWidth <= 768 ? 228 : 268;
+        const cardH = CARD_H();
         const row = Math.floor(wordIdx / cols);
         const scrollTarget = document.querySelector('main').offsetTop + row * cardH - 80;
         window.scrollTo({
@@ -14898,6 +15099,8 @@
       const gRangeEnd = parseInt(document.getElementById('gameRangeEnd').value) || 500;
       const pool = gameSource === 'bookmarked'
         ? getBookmarkedPool()
+        : gameSource === 'due'
+        ? getDueWords()
         : words.filter(w => w[0] >= gRangeStart && w[0] <= gRangeEnd);
       if (pool.length < 10) { updateGameBmHint(); return; }
       gameDistractorPool = pool; // cache for showGameQuestion — avoids re-filtering per question
@@ -16339,6 +16542,241 @@
         quizPaused = false;
       }
     });
+
+    // ── ONBOARDING ────────────────────────────────────────────────────────────────
+    const LS_ONBOARDED = 'rv_onboarded_v1';
+
+    const OB_STEPS = [
+      {
+        emoji: '👋',
+        title: 'Welcome to Russian 10,000!',
+        body: 'The 10,000 most frequent Russian words, ranked by real usage in books, news and speech. Let\'s show you around.',
+        target: null, // no spotlight — centered
+      },
+      {
+        emoji: '🗂️',
+        title: 'Filter by word type',
+        body: 'Use these pills to show only Nouns, Verbs, Adjectives, and more. Tap 🔖 Saved to see your bookmarked words.',
+        target: 'filterContainer',
+      },
+      {
+        emoji: '🔖',
+        title: 'Bookmark any word',
+        body: 'Tap the bookmark icon on a card to save it. Saved words can be used in Quiz and Game modes.',
+        target: () => document.querySelector('.btn-bookmark'),
+      },
+      {
+        emoji: '🔊',
+        title: 'Hear pronunciation',
+        body: 'Tap the speaker icon to hear native Russian pronunciation. The audio is cached so it\'s instant on repeat listens.',
+        target: () => document.querySelector('.btn-audio'),
+      },
+      {
+        emoji: '🔥',
+        title: 'Daily streak & goal',
+        body: 'This tracks your study streak. Tap it to open your progress panel where you can set a daily card goal.',
+        target: 'streakBanner',
+      },
+      {
+        emoji: '🎮',
+        title: 'Quiz & Game modes',
+        body: 'Test yourself with flashcard quizzes or play Snake, Match Pairs, and Falling Words using any word set.',
+        target: () => {
+          const q = document.getElementById('startQuizBtn');
+          const g = document.getElementById('startGameBtn');
+          if (!q || !g) return null;
+          const qr = q.getBoundingClientRect();
+          const gr = g.getBoundingClientRect();
+          return {
+            top: Math.min(qr.top, gr.top),
+            left: Math.min(qr.left, gr.left),
+            right: Math.max(qr.right, gr.right),
+            bottom: Math.max(qr.bottom, gr.bottom),
+            width: Math.max(qr.right, gr.right) - Math.min(qr.left, gr.left),
+            height: Math.max(qr.bottom, gr.bottom) - Math.min(qr.top, gr.top),
+          };
+        },
+      },
+      {
+        emoji: '✅',
+        title: 'You\'re all set!',
+        body: 'Come back daily to build your streak. Your bookmarks, progress and SRS schedule are all saved in your browser.',
+        target: null,
+        last: true,
+      },
+    ];
+
+    let obStep = 0;
+
+    function obGetRect(target) {
+      if (!target) return null;
+      if (typeof target === 'function') {
+        const result = target();
+        if (!result) return null;
+        if (result.top !== undefined) return result; // already a rect-like object
+        return result.getBoundingClientRect();
+      }
+      const el = document.getElementById(target);
+      if (!el) return null;
+      return el.getBoundingClientRect();
+    }
+
+    function obPosition(rect) {
+      const PAD = 12;
+      const tooltip = document.getElementById('obTooltip');
+      const tw = tooltip.offsetWidth || 300;
+      const th = tooltip.offsetHeight || 180;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+
+      if (!rect) {
+        // Center tooltip
+        tooltip.style.left = Math.max(16, (vw - tw) / 2) + 'px';
+        tooltip.style.top = Math.max(16, (vh - th) / 2) + 'px';
+        return;
+      }
+
+      // Try below first
+      let top = rect.bottom + PAD;
+      let left = rect.left + rect.width / 2 - tw / 2;
+
+      // Flip above if not enough room below
+      if (top + th > vh - 16) top = rect.top - th - PAD;
+      // Keep above viewport
+      if (top < 60) top = rect.bottom + PAD;
+
+      // Clamp horizontally
+      left = Math.max(16, Math.min(vw - tw - 16, left));
+      top = Math.max(60, Math.min(vh - th - 16, top));
+
+      tooltip.style.left = left + 'px';
+      tooltip.style.top = top + 'px';
+    }
+
+    function obUpdateRing(rect) {
+      const ring = document.getElementById('obRing');
+      const PAD = 8;
+      if (!rect) {
+        ring.style.display = 'none';
+        return;
+      }
+      ring.style.display = 'block';
+      ring.style.top = (rect.top - PAD + window.scrollY) + 'px';
+      ring.style.left = (rect.left - PAD) + 'px';
+      ring.style.width = (rect.width + PAD * 2) + 'px';
+      ring.style.height = (rect.height + PAD * 2) + 'px';
+    }
+
+    function obUpdateSvg(rect) {
+      const svg = document.getElementById('obSvg');
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const PAD = 8;
+
+      if (!rect) {
+        svg.innerHTML = `<rect width="${vw}" height="${vh}" fill="rgba(0,0,0,0.7)"/>`;
+        return;
+      }
+
+      const x = rect.left - PAD;
+      const y = rect.top - PAD;
+      const w = rect.width + PAD * 2;
+      const h = rect.height + PAD * 2;
+      const r = 12;
+
+      svg.innerHTML = `
+        <defs>
+          <mask id="obMask">
+            <rect width="${vw}" height="${vh}" fill="white"/>
+            <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="black"/>
+          </mask>
+        </defs>
+        <rect width="${vw}" height="${vh}" fill="rgba(0,0,0,0.72)" mask="url(#obMask)"/>
+      `;
+    }
+
+    function obRender() {
+      const step = OB_STEPS[obStep];
+      const rect = obGetRect(step.target);
+
+      // Update content
+      document.getElementById('obEmoji').textContent = step.emoji;
+      document.getElementById('obTitle').textContent = step.title;
+      document.getElementById('obBody').textContent = step.body;
+      document.getElementById('obNext').textContent = step.last ? '🎉 Let\'s go!' : 'Next →';
+      document.getElementById('obSkip').style.display = step.last ? 'none' : '';
+
+      // Dots
+      const dots = document.getElementById('obDots');
+      dots.innerHTML = OB_STEPS.map((_, i) =>
+        `<div class="ob-dot${i === obStep ? ' active' : ''}"></div>`
+      ).join('');
+
+      // Backdrop + ring
+      obUpdateSvg(rect);
+      obUpdateRing(rect);
+
+      // Position tooltip after paint so we have correct dimensions
+      const tooltip = document.getElementById('obTooltip');
+      tooltip.style.display = 'block';
+      requestAnimationFrame(() => obPosition(rect));
+
+      // Scroll target into view if needed
+      if (rect && (rect.top < 60 || rect.bottom > window.innerHeight)) {
+        const elId = typeof step.target === 'string' ? step.target : null;
+        if (elId) {
+          document.getElementById(elId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setTimeout(() => {
+            const r2 = obGetRect(step.target);
+            obUpdateSvg(r2);
+            obUpdateRing(r2);
+            requestAnimationFrame(() => obPosition(r2));
+          }, 400);
+        }
+      }
+    }
+
+    function obNext() {
+      if (obStep < OB_STEPS.length - 1) {
+        obStep++;
+        obRender();
+      } else {
+        obFinish();
+      }
+    }
+
+    function obFinish() {
+      localStorage.setItem(LS_ONBOARDED, '1');
+      const backdrop = document.getElementById('obBackdrop');
+      const tooltip = document.getElementById('obTooltip');
+      const ring = document.getElementById('obRing');
+      const svg = document.getElementById('obSvg');
+      backdrop.style.opacity = '0';
+      tooltip.style.opacity = '0';
+      setTimeout(() => {
+        backdrop.classList.remove('active');
+        backdrop.style.opacity = '';
+        backdrop.style.display = 'none';
+        if (svg) svg.innerHTML = '';
+        tooltip.style.display = 'none';
+        tooltip.style.opacity = '';
+        ring.style.display = 'none';
+      }, 300);
+    }
+
+    function obStart() {
+      if (localStorage.getItem(LS_ONBOARDED)) return;
+      obStep = 0;
+      document.getElementById('obBackdrop').classList.add('active');
+      // Wait for first card to render before starting
+      setTimeout(obRender, 600);
+    }
+
+    document.getElementById('obNext').addEventListener('click', obNext);
+    document.getElementById('obSkip').addEventListener('click', obFinish);
+    // ── END ONBOARDING ────────────────────────────────────────────────────────────
+
+    obStart();
   </script>
 </body>
 
